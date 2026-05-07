@@ -1,0 +1,42 @@
+
+xcode 发布https://blog.csdn.net/m0_74760716/article/details/131461264
+
+
+com.guangying.yongshi
+
+git@github.com:csyinghuochong/yongshiyujiayuan.git
+https://github.com/csyinghuochong/yongshiyujiayuan.git
+
+202302062242@163.com    tcg19900526A     表情微笑定格
+
+以管理员运行命令行，手动输入命令 net start mongodb 开启服务。
+
+雨松设置分辨率
+https://www.xuanyusong.com/archives/3205
+
+
+先关闭rdpclip.exe
+点击开始->运行->输入“rdpclip.exe ” 并回车，重新运行此程序
+
+优化网络开销
+@老姚 https://github.com/davidfowl/BedrockFramework
+
+资源释放11
+https://www.jianshu.com/p/f21c455e5f17
+
+
+ET老阴逼  
+6.64 Zmq:/ 复制打开抖音，看看【老阴侠666的作品】unity3d+ET6-战斗系统开发实战 @uni... https://v.douyin.com/DNSsMkD/
+
+https://github.com/FlameskyDexive/Legends-Of-Heroes
+
+
+https://blog.csdn.net/Bilibili_Cheers/article/details/108081650
+
+https://www.dgrt.cn/a/1965778.html?action=onClick
+
+http://www.taodudu.cc/news/show-5461096.html?action=onClick   //相机 设置 参数
+
+https://blog.csdn.net/qq_35649669/article/details/125938480        //urpshader 规则1
+
+https://zhuanlan.zhihu.com/p/604880712		                     //urpshader 规则2
