@@ -184,7 +184,7 @@
         public const int BloodstoneFail = 3184;                                     //血石升级失败
         public const int GemWarehouseOpen = 3185;
         public const int PaiMaiOpen = 3186;
-        public const int UpdateActivty = 3187;                                     //更新活动
+        public const int UpdateActivtyTime = 3187;                                     //更新活动
         public const int MasterPlayerId = 3188;                                          //主人【玩家】
         public const int PaiMaiTodayGold = 3189;
         public const int ShenMiDungeonNumber = 3190;
@@ -1052,19 +1052,19 @@
         public const int Extra_Buff_Resistance_Dizziness_Pro_Add = Now_Resistance_Dizziness_Pro * 100 + 11;            //属性Buff附加加法
         public const int Extra_Buff_Resistance_Dizziness_Pro_Mul = Now_Resistance_Dizziness_Pro * 100 + 12;            //属性Buff附加乘法
 
-        public const int Now_GoldAdd_Pro = 2201;          //经验收益
-        public const int Base_GoldAdd_Pro_Base = Now_GoldAdd_Pro * 100 + 1;                  //属性累加
-        public const int Base_GoldAdd_Pro_Mul = Now_GoldAdd_Pro * 100 + 2;                   //属性乘法
-        public const int Base_GoldAdd_Pro_Add = Now_GoldAdd_Pro * 100 + 3;                   //属性附加
-        public const int Extra_Buff_GoldAdd_Pro_Add = Now_GoldAdd_Pro * 100 + 11;            //属性Buff附加加法
-        public const int Extra_Buff_GoldAdd_Pro_Mul = Now_GoldAdd_Pro * 100 + 12;            //属性Buff附加乘法
-
-        public const int Now_ExpAdd_Pro = 2202;          //金币收益
+        public const int Now_ExpAdd_Pro = 2201;          //经验收益
         public const int Base_ExpAdd_Pro_Base = Now_ExpAdd_Pro * 100 + 1;                  //属性累加
         public const int Base_ExpAdd_Pro_Mul = Now_ExpAdd_Pro * 100 + 2;                   //属性乘法
         public const int Base_ExpAdd_Pro_Add = Now_ExpAdd_Pro * 100 + 3;                   //属性附加
         public const int Extra_Buff_ExpAdd_Pro_Add = Now_ExpAdd_Pro * 100 + 11;            //属性Buff附加加法
         public const int Extra_Buff_ExpAdd_Pro_Mul = Now_ExpAdd_Pro * 100 + 12;            //属性Buff附加乘法
+
+        public const int Now_JinbiAdd_Pro = 2202;          //金币收益
+        public const int Base_JinbiAdd_Pro_Base = Now_JinbiAdd_Pro * 100 + 1;                  //属性累加
+        public const int Base_JinbiAdd_Pro_Mul = Now_JinbiAdd_Pro * 100 + 2;                   //属性乘法
+        public const int Base_JinbiAdd_Pro_Add = Now_JinbiAdd_Pro * 100 + 3;                   //属性附加
+        public const int Extra_Buff_JinbiAdd_Pro_Add = Now_JinbiAdd_Pro * 100 + 11;            //属性Buff附加加法
+        public const int Extra_Buff_JinbiAdd_Pro_Mul = Now_JinbiAdd_Pro * 100 + 12;            //属性Buff附加乘法
         
 
         public const int Now_DropAdd_Pro = 2203;          //爆率收益

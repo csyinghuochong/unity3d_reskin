@@ -307,7 +307,7 @@ namespace ET
             { NumericType.Now_ActSpeedPro, new NumericAttribute(){ Name = "攻击速度", Icon =  string.Empty }},
             { NumericType.Now_ActBossAddDamge, new NumericAttribute(){ Name = "对怪伤害", Icon =  string.Empty }},
             { NumericType.Now_PlayerActDamgeSubPro, new NumericAttribute(){Name = "玩家普攻减伤",Icon = string.Empty}}, { NumericType.Now_PlayerSkillDamgeSubPro, new NumericAttribute(){Name = "玩家技能减伤",Icon = string.Empty}},
-            { NumericType.Now_GoldAdd_Pro, new NumericAttribute(){Name = "经验收益",Icon = string.Empty}},
+            { NumericType.Now_ExpAdd_Pro, new NumericAttribute(){Name = "经验收益",Icon = string.Empty}},
             { NumericType.Now_ExpAdd_Pro, new NumericAttribute(){Name = "金币收益",Icon = string.Empty}},
             { NumericType.Now_DropAdd_Pro, new NumericAttribute(){ Name = "游戏爆率", Icon = string.Empty}},
             { NumericType.Now_MonsterActIncreaseDamgeSubPro, new NumericAttribute(){ Name = "怪攻增伤", Icon = string.Empty}},

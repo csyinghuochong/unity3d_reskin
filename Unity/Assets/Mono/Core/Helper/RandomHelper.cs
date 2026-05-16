@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine;
 using Random = System.Random;
 
 namespace ET
@@ -378,6 +379,28 @@ namespace ET
 
             float value = lower + ((upper - lower) * RandFloat());
             return value;
+        }
+        
+        /// <summary>
+        /// 圆内随机点（均匀分布，不聚集在圆心）
+        /// </summary>
+        public static Vector3 GetRandomPointInCircle(Vector3 centerPos, float radius)
+        {
+            if (radius <= 0f)
+                return centerPos;
+
+            // 均匀随机角度
+            float angle = RandomNumberFloat(0, MathF.PI * 2f);
+    
+            // 均匀分布（开根号 = 不聚集在圆心）
+            float rand = MathF.Sqrt(RandFloat01());
+            float currentRadius = rand * radius;
+
+            // 计算最终位置
+            float x = centerPos.x + MathF.Cos(angle) * currentRadius;
+            float z = centerPos.z + MathF.Sin(angle) * currentRadius;
+
+            return new Vector3(x, centerPos.y, z);
         }
     }
 }
