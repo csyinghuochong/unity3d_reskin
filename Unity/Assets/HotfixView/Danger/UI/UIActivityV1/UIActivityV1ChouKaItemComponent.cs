@@ -1,0 +1,80 @@
+﻿using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+    public class UIActivityV1ChouKaItemComponent: Entity, IAwake<GameObject>
+    {
+        public GameObject GameObject;
+        public GameObject ClickBtn;
+        public GameObject NumText;
+        public GameObject RewardListNode;
+        public GameObject ReceivedImg;
+
+        public int Key;
+    }
+
+    public class UIActivityV1ChouKaItemComponentAwakeSystem: AwakeSystem<UIActivityV1ChouKaItemComponent, GameObject>
+    {
+        public override void Awake(UIActivityV1ChouKaItemComponent self, GameObject gameObject)
+        {
+            self.GameObject = gameObject;
+            ReferenceCollector rc = gameObject.GetComponent<ReferenceCollector>();
+
+            self.ClickBtn = rc.Get<GameObject>("ClickBtn");
+            self.NumText = rc.Get<GameObject>("NumText");
+            self.RewardListNode = rc.Get<GameObject>("RewardListNode");
+            self.ReceivedImg = rc.Get<GameObject>("ReceivedImg");
+
+            self.ClickBtn.GetComponent<Button>().onClick.AddListener(() => { self.OnClickBtn().Coroutine(); });
+        }
+    }
+
+    public static class UIActivityV1ChouKaItemComponentSystem
+    {
+        public static void OnUpdateData(this UIActivityV1ChouKaItemComponent self, int key)
+        {
+            self.Key = key;
+            self.NumText.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("{0}次"), key);
+            UICommonHelper.ShowItemList(ActivityConfigHelper.ChouKaNumberReward[key], self.RewardListNode, self, 0.8f);
+
+            bool recv = self.ZoneScene().GetComponent<ActivityComponent>().ActivityV1Info.ChouKaNumberReward.Contains(self.Key);
+            self.ReceivedImg.SetActive(recv);
+            self.ClickBtn.SetActive(!recv);
+        }
+
+        public static async ETTask OnClickBtn(this UIActivityV1ChouKaItemComponent self)
+        {
+            if (!ActivityConfigHelper.ChouKaNumberReward.ContainsKey(self.Key))
+            {
+                return;
+            }
+
+            if (self.ZoneScene().GetComponent<ActivityComponent>().ActivityV1Info.ChouKaNumberReward.Contains(self.Key))
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("已经领取"));
+                return;
+            }
+
+            if (UnitHelper.GetMyUnitFromZoneScene(self.ZoneScene()).GetComponent<NumericComponent>().GetAsInt(NumericType.V1ChouKaNumber) <
+                self.Key)
+            {
+               FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("次数不足"));
+                return;
+            }
+
+            C2M_ActivityRewardRequest request =
+                    new C2M_ActivityRewardRequest() { ActivityType = ActivityConfigHelper.ActivityV1_ChouKa, RewardId = self.Key };
+            M2C_ActivityRewardResponse response =
+                    (M2C_ActivityRewardResponse)await self.ZoneScene().GetComponent<SessionComponent>().Session.Call(request);
+
+            if (response.Error != ErrorCode.ERR_Success)
+            {
+                return;
+            }
+
+            self.ReceivedImg.SetActive(true);
+            self.ClickBtn.SetActive(false);
+        }
+    }
+}

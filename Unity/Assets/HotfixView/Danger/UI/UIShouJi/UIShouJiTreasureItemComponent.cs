@@ -1,0 +1,140 @@
+﻿using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+    public class UIShouJiTreasureItemComponent: Entity, IAwake<GameObject>, IDestroy
+    {
+        public GameObject RedDot;
+        public GameObject TextNumber;
+        public GameObject TextAttribute;
+        public GameObject ButtonActive;
+        public GameObject ImageActived;
+        public GameObject UICommonItem;
+        public GameObject GameObject;
+
+        public int ShoujiId;
+        public UIItemComponent UIItemComponent;
+        public ShoujiComponent ShoujiComponent;
+    }
+
+    public class UIShouJiTreasureItemComponentAwake: AwakeSystem<UIShouJiTreasureItemComponent, GameObject>
+    {
+        public override void Awake(UIShouJiTreasureItemComponent self, GameObject gameObject)
+        {
+            self.GameObject = gameObject;
+            ReferenceCollector rc = gameObject.GetComponent<ReferenceCollector>();
+
+            self.RedDot = rc.Get<GameObject>("RedDot");
+            self.TextAttribute = rc.Get<GameObject>("TextAttribute");
+            self.ButtonActive = rc.Get<GameObject>("ButtonActive");
+            self.ImageActived = rc.Get<GameObject>("ImageActived");
+            self.UICommonItem = rc.Get<GameObject>("UICommonItem");
+            self.TextNumber = rc.Get<GameObject>("TextNumber");
+
+            self.UIItemComponent = self.AddChild<UIItemComponent, GameObject>(self.UICommonItem);
+            self.ButtonActive.GetComponent<Button>().onClick.AddListener(() => { self.OnButtonActive().Coroutine(); });
+
+            self.ShoujiComponent = self.ZoneScene().GetComponent<ShoujiComponent>();
+
+            self.RedDot.SetActive(false);
+            
+            self.OnLanguageUpdate();
+            DataUpdateComponent.Instance.AddListener(DataType.LanguageUpdate, self);
+        }
+    }
+    
+    public class UIShouJiTreasureItemComponentDestroySystem : DestroySystem<UIShouJiTreasureItemComponent>
+    {
+        public override void Destroy(UIShouJiTreasureItemComponent self)
+        {
+            DataUpdateComponent.Instance.RemoveListener(DataType.LanguageUpdate, self);
+        }
+    }
+
+    public static class UIShouJiTreasureItemComponentSystem
+    {
+        public static void OnLanguageUpdate(this UIShouJiTreasureItemComponent self)
+        {
+            self.TextAttribute.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 28 : 26;
+        }
+
+        public static async ETTask OnButtonActive(this UIShouJiTreasureItemComponent self)
+        {
+            UI uI = await UIHelper.Create(self.ZoneScene(), UIType.UIShouJiSelect);
+            uI.GetComponent<UIShouJiSelectComponent>().OnInitUI(self.ShoujiId, self.UpdateRedDotState);
+        }
+
+        /// <summary>
+        /// 更新红点状态
+        /// </summary>
+        /// <param name="self"></param>
+        public static void UpdateRedDotState(this UIShouJiTreasureItemComponent self)
+        {
+            ShouJiItemConfig shouJiItemConfig = ShouJiItemConfigCategory.Instance.Get(self.ShoujiId);
+            KeyValuePairInt keyValuePairInt = self.ShoujiComponent.GetTreasureInfo(self.ShoujiId);
+            int haveNumber = keyValuePairInt != null? (int)keyValuePairInt.Value : 0;
+            self.TextNumber.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("激活:{0}/{1}"), haveNumber, shouJiItemConfig.AcitveNum);
+            bool actived = haveNumber >= shouJiItemConfig.AcitveNum;
+
+            // 显示红点
+            BagComponent bagComponent = self.ZoneScene().GetComponent<BagComponent>();
+            self.RedDot.SetActive(bagComponent.GetItemNumber(shouJiItemConfig.ItemID) > 0 && !actived);
+            
+            self.GetParent<UIShouJiTreasureComponent>().UpdateRedDot();
+        }
+
+        public static void OnInitUI(this UIShouJiTreasureItemComponent self, int shouijId)
+        {
+            self.ShoujiId = shouijId;
+            ShouJiItemConfig shouJiItemConfig = ShouJiItemConfigCategory.Instance.Get(shouijId);
+
+            self.UIItemComponent.UpdateItem(new BagInfo() { ItemID = shouJiItemConfig.ItemID }, ItemOperateEnum.None);
+            self.UIItemComponent.Label_ItemNum.SetActive(false);
+
+            string attributeStr = string.Empty;
+
+            string[] attributeInfoList = shouJiItemConfig.AddPropreListStr.Split('@');
+            for (int i = 0; i < attributeInfoList.Length; i++)
+            {
+                string[] attributeInfo = attributeInfoList[i].Split(',');
+                int numericType = int.Parse(attributeInfo[0]);
+
+                if (NumericHelp.GetNumericValueType(numericType) == 2)
+                {
+                    float fvalue = float.Parse(attributeInfo[1]);
+                    string svalue = fvalue.ToString("0.#####");
+                    attributeStr = attributeStr + $"{ItemViewHelp.GetAttributeName(numericType)} {svalue}% ";
+                }
+                else
+                {
+                    attributeStr = attributeStr + string.Format(GameSettingLanguge.LoadLocalization("提升{0}{1}点"), ItemViewHelp.GetAttributeName(numericType), int.Parse(attributeInfo[1]));
+                }
+
+                if (i < attributeInfoList.Length - 1)
+                {
+                    attributeStr += "\n";
+                }
+            }
+
+            self.TextAttribute.GetComponent<Text>().text = attributeStr;
+
+            KeyValuePairInt keyValuePairInt = self.ShoujiComponent.GetTreasureInfo(shouijId);
+            int haveNumber = keyValuePairInt != null? (int)keyValuePairInt.Value : 0;
+            self.TextNumber.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("激活:{0}/{1}"), haveNumber, shouJiItemConfig.AcitveNum);
+
+            UICommonHelper.SetImageGray(self.UIItemComponent.Image_ItemIcon, haveNumber == 0);
+            UICommonHelper.SetImageGray(self.UIItemComponent.Image_ItemQuality, haveNumber == 0);
+
+            bool actived = haveNumber >= shouJiItemConfig.AcitveNum;
+
+            // 显示红点
+            BagComponent bagComponent = self.ZoneScene().GetComponent<BagComponent>();
+            self.RedDot.SetActive(bagComponent.GetItemNumber(shouJiItemConfig.ItemID) > 0 && !actived);
+
+            self.ButtonActive.SetActive(!actived);
+            self.ImageActived.SetActive(actived);
+        }
+    }
+}

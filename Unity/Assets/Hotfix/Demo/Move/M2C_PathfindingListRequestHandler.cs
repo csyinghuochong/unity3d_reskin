@@ -1,0 +1,36 @@
+using UnityEngine;
+
+namespace ET
+{
+    [MessageHandler]
+    public class M2C_PathfindingListRequestHandler : AMHandler<M2C_PathfindingListRequest>
+    {
+        protected override void Run(Session session, M2C_PathfindingListRequest messagelist)
+        {
+            UnitComponent unitComponent = session.ZoneScene().CurrentScene().GetComponent<UnitComponent>();
+
+            for(int p = 0; p < messagelist.PathList.Count; p++)
+            {
+                M2C_PathfindingRequest message = messagelist.PathList[p];
+                Unit unit = unitComponent.Get(message.Id);
+                if (unit == null)
+                {
+                    return;
+                }
+
+                float speed = unit.GetComponent<NumericComponent>().GetAsFloat(NumericType.Now_Speed);
+                using (ListComponent<Vector3> list = ListComponent<Vector3>.Create())
+                {
+                    list.Add( unit.Position );
+                    for (int i = 0; i < message.Xs.Count; ++i)
+                    {
+                        list.Add(new Vector3(message.Xs[i], message.Ys[i], message.Zs[i]));
+                    }
+                    unit.SpeedRate = messagelist.PathList[0].SpeedRate;
+                    unit.GetComponent<MoveComponent>().MoveToAsync(list, speed * (message.SpeedRate * 0.01f)).Coroutine();
+                }
+            }
+
+        }
+    }
+}

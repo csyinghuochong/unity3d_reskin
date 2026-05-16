@@ -1,0 +1,26 @@
+{
+    "name": "Unity.HotfixView",
+    "rootNamespace": "",
+    "references": [
+        "Unity.Hotfix",
+        "Unity.Model",
+        "Unity.ModelView",
+        "Unity.Mono",
+        "Unity.ThirdParty",
+        "Unity.TextMeshPro",
+        "TapTap.AntiAddiction",
+        "AppleAuth",
+        "TapSDK.Login.Runtime",
+        "TapSDK.Compliance",
+        "TapSDK.Core.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

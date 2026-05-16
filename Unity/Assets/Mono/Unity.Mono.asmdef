@@ -1,0 +1,29 @@
+{
+    "name": "Unity.Mono",
+    "rootNamespace": "",
+    "references": [
+        "Unity.ThirdParty",
+        "Unity.TextMeshPro",
+        "HybridCLR.Runtime",
+        "UnityEngine.Purchasing",
+        "UnityEngine.Purchasing.Stores",
+        "TapTap.AntiAddiction",
+        "AppleAuth",
+        "Unity.Services.Core",
+        "Unity.Services.Core.Environments",
+        "Google.SignIn",
+        "TapSDK.Login.Runtime",
+        "Google.Play.Games"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [
+        ""
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

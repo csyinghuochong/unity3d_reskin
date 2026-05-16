@@ -1,0 +1,266 @@
+﻿using System;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+
+    [Timer(TimerType.AuctionTimer)]
+    public class AuctionTimer : ATimer<UIPaiMaiAuctionComponent>
+    {
+        public override void Run(UIPaiMaiAuctionComponent self)
+        {
+            try
+            {
+                self.OnAuctionTimer();
+            }
+            catch (Exception e)
+            {
+                Log.Error($"move timer error: {self.Id}\n{e}");
+            }
+        }
+    }
+
+    public class UIPaiMaiAuctionComponent : Entity, IAwake, IDestroy
+    {
+        public GameObject TextBaoZhenJin;
+        public GameObject Btn_CanYu;
+        public GameObject Text_2;
+        public GameObject TextPrice;
+        public GameObject Btn_Auction;
+        public GameObject Btn_BuyNum_jian1;
+        public GameObject Btn_BuyNum_jia1;
+        public GameObject ButtonClose;
+        public InputField Lab_RmbNum;
+        public GameObject TextAuctionPlayer;
+        public UIItemComponent UICommonItem;
+        public GameObject Btn_Record;
+
+        public long AuctionStatus;  //结束时间
+        public long AuctionTimer;
+        public long AuctionStart;   //起拍价
+        public bool BaoZhenJin;
+
+        public bool AuctionJoin;
+    }
+
+    public class UIPaiMaiAuctionComponentAwake : AwakeSystem<UIPaiMaiAuctionComponent>
+    {
+        public override void Awake(UIPaiMaiAuctionComponent self)
+        {
+            self.BaoZhenJin = false;
+            self.AuctionJoin = false;
+            ReferenceCollector rc = self.GetParent<UI>().GameObject.GetComponent<ReferenceCollector>();
+
+            self.TextPrice = rc.Get<GameObject>("TextPrice");
+
+            self.Text_2 = rc.Get<GameObject>("Text_2");
+
+            GameObject UICommonItem = rc.Get<GameObject>("UICommonItem");
+            self.UICommonItem = self.AddChild<UIItemComponent, GameObject>(UICommonItem);
+
+            self.TextBaoZhenJin = rc.Get<GameObject>("TextBaoZhenJin");
+            self.TextBaoZhenJin.GetComponent<Text>().text = string.Empty;
+
+            self.Btn_Auction = rc.Get<GameObject>("Btn_Auction");
+            ButtonHelp.AddListenerEx(self.Btn_Auction, () => { self.OnBtn_Auction().Coroutine(); });
+
+            self.Btn_CanYu = rc.Get<GameObject>("Btn_CanYu");
+            ButtonHelp.AddListenerEx(self.Btn_CanYu, self.OnBtn_CanYu);
+
+            self.Btn_Record = rc.Get<GameObject>("Btn_Record");
+            ButtonHelp.AddListenerEx(self.Btn_Record, () => { UIHelper.Create( self.ZoneScene(), UIType.UIAuctionRecode ).Coroutine() ; });
+
+            self.TextAuctionPlayer = rc.Get<GameObject>("TextAuctionPlayer");
+
+            self.Btn_BuyNum_jian1 = rc.Get<GameObject>("Btn_BuyNum_jian1");
+            self.Btn_BuyNum_jian1.GetComponent<Button>().onClick.AddListener(() => { self.Btn_BuyNum_jia(-1); });
+            self.Btn_BuyNum_jia1 = rc.Get<GameObject>("Btn_BuyNum_jia1");
+            self.Btn_BuyNum_jia1.GetComponent<Button>().onClick.AddListener(() => { self.Btn_BuyNum_jia(1);  });
+
+            self.ButtonClose = rc.Get<GameObject>("ButtonClose");
+            self.ButtonClose.GetComponent<Button>().onClick.AddListener(() => { UIHelper.Remove( self.ZoneScene(), UIType.UIPaiMaiAuction );  });
+            self.Lab_RmbNum = rc.Get<GameObject>("Lab_RmbNum").GetComponent<InputField>();
+
+            self.RequestPaiMaiAuction().Coroutine();
+            self.Text_2.GetComponent<Text>().text = string.Empty;
+            self.AuctionTimer = TimerComponent.Instance.NewRepeatedTimer(1000, TimerType.AuctionTimer, self);
+        }
+    }
+
+    public class UIPaiMaiAuctionComponentDestroy : DestroySystem<UIPaiMaiAuctionComponent>
+    {
+        public override void Destroy(UIPaiMaiAuctionComponent self)
+        {
+            TimerComponent.Instance?.Remove(ref self.AuctionTimer);
+        }
+    }
+
+    public static class UIPaiMaiAuctionComponentSystem
+    {
+        public static void OnAuctionTimer(this UIPaiMaiAuctionComponent self)
+        {
+            if (self.AuctionStatus == 0)
+            {
+                return;
+            }
+            if (TimeHelper.ServerNow() >= self.AuctionStatus)
+            {
+                self.Text_2.GetComponent<Text>().text = GameSettingLanguge.LoadLocalization("已结束");
+                TimerComponent.Instance?.Remove(ref self.AuctionTimer);
+                return;
+            }
+            long leftTime = self.AuctionStatus - TimeHelper.ServerNow();
+            self.Text_2.GetComponent<Text>().text = GameSettingLanguge.LoadLocalization("剩余时间:") + UICommonHelper.ShowLeftTime(leftTime, GameSettingLanguge.Language); 
+        }
+
+        public static void Btn_BuyNum_jia(this UIPaiMaiAuctionComponent self, int add)
+        {
+
+            long paiprice = long.Parse(self.TextPrice.GetComponent<Text>().text);
+
+            string text = self.Lab_RmbNum.text;
+
+            if (add < 0) {
+                //降低
+                add = (int)(add * paiprice * 0.1f);
+            }
+
+            if (add > 0) {
+                //增加
+                add = (int)(add * paiprice * 0.1f);
+            }
+           
+            long curprice = long.Parse(text);
+
+            curprice += add;
+
+            if (curprice < paiprice)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("不能小于竞拍价！"));
+                return;
+            }
+
+            self.Lab_RmbNum.text = curprice.ToString();
+        }
+
+        public static async ETTask OnBtn_Auction(this UIPaiMaiAuctionComponent self)
+        {
+            string text = self.Lab_RmbNum.text;
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+            long price = long.Parse(text);
+            if (price < 0)
+            {
+                return;
+            }
+            UserInfo userInfo = self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo;
+            if (userInfo.Gold < price)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("金币不足！"));
+                return;
+            }
+
+
+            long instanceid = self.InstanceId;
+            C2M_PaiMaiAuctionPriceRequest request = new C2M_PaiMaiAuctionPriceRequest() { Price = price };
+            M2C_PaiMaiAuctionPriceResponse response = (M2C_PaiMaiAuctionPriceResponse)await self.ZoneScene().GetComponent<SessionComponent>().Session.Call(request);
+
+            if (instanceid != self.InstanceId || response.Error != ErrorCode.ERR_Success)
+            {
+                return;
+            }
+
+            self.RequestPaiMaiAuction().Coroutine();
+        }
+
+        public static  void OnBtn_CanYu(this UIPaiMaiAuctionComponent self)
+        {
+            int returngold = (int)(self.AuctionStart * 0.1f);
+            if (returngold <= 0)
+            {
+                return;
+            }
+            PopupTipHelp.OpenPopupTip(self.ZoneScene(), GameSettingLanguge.LoadLocalization("参与竞拍"), string.Format(GameSettingLanguge.LoadLocalization("扣除{0}金币的保证金"), returngold), () =>
+           {
+               self.RquestCanYu().Coroutine();
+           }, null).Coroutine();
+        }
+
+        public static async ETTask RquestCanYu(this UIPaiMaiAuctionComponent self)
+        {
+            if (self.AuctionJoin)
+            {
+                return;
+            }
+            self.AuctionJoin = true;
+            C2M_PaiMaiAuctionJoinRequest request = new C2M_PaiMaiAuctionJoinRequest() { };
+            M2C_PaiMaiAuctionJoinResponse response = (M2C_PaiMaiAuctionJoinResponse)await self.ZoneScene().GetComponent<SessionComponent>().Session.Call(request);
+            if (response.Error != ErrorCode.ERR_Success)
+            {
+                return;
+            }
+            self.RequestPaiMaiAuction().Coroutine();
+        }
+
+        public static async ETTask RequestPaiMaiAuction(this UIPaiMaiAuctionComponent self)
+        {
+            long instanceid = self.InstanceId;
+            Unit unit = UnitHelper.GetMyUnitFromZoneScene( self.ZoneScene() );
+            C2P_PaiMaiAuctionInfoRequest  request = new C2P_PaiMaiAuctionInfoRequest() { UnitId = unit.Id };
+            P2C_PaiMaiAuctionInfoResponse response = (P2C_PaiMaiAuctionInfoResponse)await self.ZoneScene().GetComponent<SessionComponent>().Session.Call(request);
+
+            if (instanceid != self.InstanceId)
+            {
+                return;
+            }
+            if (TimeHelper.ServerNow() >= response.AuctionStatus)
+            {
+                self.Text_2.GetComponent<Text>().text = GameSettingLanguge.LoadLocalization("已结束");
+                self.Btn_Auction.SetActive(false);
+                self.Btn_CanYu.SetActive(false);
+                return;
+            }
+            self.AuctionStatus = response.AuctionStatus;
+            self.OnUpdateUI( response.AuctionItem, response.AuctionNumber, response.AuctionPrice );
+            self.TextAuctionPlayer.GetComponent<Text>().text = GameSettingLanguge.LoadLocalization("出价玩家:") + response.AuctionPlayer;
+            self.UICommonItem.Label_ItemNum.GetComponent<Text>().text = response.AuctionNumber.ToString();
+            self.AuctionStart = response.AuctionStart;
+
+            self.Btn_CanYu.SetActive(!response.AuctionJoin);
+            self.Btn_Auction.SetActive(response.AuctionJoin);
+            self.AuctionJoin = false;
+            if (response.AuctionJoin)
+            {
+                int returngold = (int)(response.AuctionStart * 0.1f);
+                string text = string.Format(GameSettingLanguge.LoadLocalization("已经缴纳{0}保证金"), returngold);
+                self.TextBaoZhenJin.GetComponent<Text>().text = text;
+            }
+            else
+            {
+                self.TextBaoZhenJin.GetComponent<Text>().text = string.Empty;
+            }
+        }
+
+        public static void OnUpdateUI(this UIPaiMaiAuctionComponent self, int itemid, int number,  long price)
+        { 
+            self.TextPrice.GetComponent<Text>().text = price.ToString();    
+            self.Lab_RmbNum.text = price.ToString();
+
+            self.UICommonItem.UpdateItem( new BagInfo() { ItemID = itemid, ItemNum = number }, ItemOperateEnum.None );
+        }
+
+        public static void OnRecvHorseNotice(this UIPaiMaiAuctionComponent self, string noticeText)
+        {
+            //$"{self.AuctionItem}_{self.AuctionItemNum}_{self.AuctionPrice}_{self.AuctionPlayer}_1").
+            string[] infos = noticeText.Split('_');
+            int itmeid = int.Parse(infos[0]);
+            int itmenumber = int.Parse(infos[1]);
+            long price = long.Parse(infos[2]);
+            self.OnUpdateUI(itmeid, itmenumber, price);
+            self.TextAuctionPlayer.GetComponent<Text>().text = GameSettingLanguge.LoadLocalization("出价玩家:") + infos[3];
+        }
+    }
+}

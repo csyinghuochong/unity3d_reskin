@@ -1,0 +1,5 @@
+{"list":[{"_t":"StartZoneConfig","_id":1,"DBConnection":"mongodb://localhost:27017/","PhysicZone":1,"DBName":"game_s1"},
+{"_t":"StartZoneConfig","_id":2,"DBConnection":"mongodb://localhost:27017/","PhysicZone":2,"DBName":"game_s2"},
+{"_t":"StartZoneConfig","_id":1000,"DBConnection":"mongodb://localhost:27017/","PhysicZone":1000,"DBName":"game_s1000(center)"},
+{"_t":"StartZoneConfig","_id":1001,"DBConnection":"mongodb://localhost:27017/","PhysicZone":1001,"DBName":"game_s1001(robot)"},
+]}

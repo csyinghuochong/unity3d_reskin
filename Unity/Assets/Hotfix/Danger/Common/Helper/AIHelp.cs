@@ -1,0 +1,636 @@
+﻿using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace ET
+{
+    public static class AIHelp
+    {
+
+        //己方位置
+        public static readonly List<Vector3> Formation_1 = new List<Vector3>()
+        {
+            //前排
+            new Vector3(-1.88f, 0f, -9.11f),
+            new Vector3(1.17f, 0f, -9.11f),
+            new Vector3(4.28f, 0f, -9.11f),
+            //中排
+            new Vector3(-1.88f, 0f, -12.16f),
+            new Vector3(1.17f, 0f, -12.16f),
+            new Vector3(4.28f, 0f, -12.16f),
+            //后排
+            new Vector3(-1.88f, 0f, -15.33f),
+            new Vector3(1.17f, 0f, -15.33f),
+            new Vector3(4.28f, 0f, -15.33f),
+
+        };
+
+        //对方位置
+        public static readonly List<Vector3> Formation_2 = new List<Vector3>()
+        {
+            //前排
+            new Vector3(-1.88f, 0f, 9.87f),
+            new Vector3(1.17f, 0f, 9.87f),
+            new Vector3(4.28f, 0f, 9.87f),
+            //中排
+            new Vector3(-1.88f, 0f, 13.09f),
+            new Vector3(1.17f, 0f, 13.09f),
+            new Vector3(4.28f, 0f, 13.09f),
+            //后排
+            new Vector3(-1.88f, 0f,16.14f),
+            new Vector3(1.17f, 0f, 16.14f),
+            new Vector3(4.28f, 0f, 16.14f),
+        };
+
+
+        /// <summary>
+        /// 每个格子对应的搜索顺序
+        /// </summary>
+
+        public static readonly List<int>[] PetPositionAttack = new List<int>[]
+        {
+            /*
+            new List<int>(){ 0, 3, 6, 1, 4, 7, 2, 5, 8 },
+            new List<int>(){ 1, 4, 7, 0, 3, 6, 2, 5, 8 },
+            new List<int>(){ 2, 5, 8, 1, 4, 7, 0, 3, 6 },
+            new List<int>(){ 0, 3, 6, 1, 4, 7, 2, 5, 8 },
+            new List<int>(){ 1, 4, 7, 0, 3, 6, 2, 5, 8 },
+            new List<int>(){ 2, 5, 8, 1, 4, 7, 0, 3, 6 },
+            new List<int>(){ 0, 3, 6, 1, 4, 7, 2, 5, 8 },
+            new List<int>(){ 1, 4, 7, 0, 3, 6, 2, 5, 8 },
+            new List<int>(){ 2, 5, 8, 1, 4, 7, 0, 3, 6 }
+            */
+
+            new List<int>(){ 0, 1, 2, 3, 4, 5, 6, 7, 8 },
+            new List<int>(){ 1, 0, 2, 4, 3, 5, 7, 6, 8 },
+            new List<int>(){ 2, 1, 0, 5, 4, 3, 8, 7, 6 },
+            new List<int>(){ 0, 1, 2, 3, 4, 5, 6, 7, 8 },
+            new List<int>(){ 1, 0, 2, 4, 3, 5, 7, 6, 8 },
+            new List<int>(){ 2, 1, 0, 5, 4, 3, 8, 7, 6 },
+            new List<int>(){ 0, 1, 2, 3, 4, 5, 6, 7, 8 },
+            new List<int>(){ 1, 0, 2, 4, 3, 5, 7, 6, 8 },
+            new List<int>(){ 2, 1, 0, 5, 4, 3, 8, 7, 6 }
+
+        };
+
+        //摄像机位置
+        public static readonly Vector3 FuBenCameraPosition = new Vector3(14, 22f, 0f);
+        public static readonly Quaternion FuBenCameraRotation = Quaternion.Euler(60f, -90f, 0);
+        //拖动位置
+        public static readonly float FuBenCameraPositionMin_X = -50f;
+        public static readonly float FuBenCameraPositionMax_X = 50f;
+        public static readonly float FuBenCameraPositionMin_Z = -50f;
+        public static readonly float FuBenCameraPositionMax_Z = 50f;
+
+        public static Unit GetNearestEnemy_Client(Unit main, float maxdis)
+        {
+            Unit nearest = null;
+            float distance = -1f;
+            List<Unit> units = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit unit = units[i];
+                if (unit.IsDisposed || main.Id == unit.Id)
+                {
+                    continue;
+                }
+                float dd = PositionHelper.Distance2D(main, unit);
+                if (dd > maxdis || !main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+
+                //找到目标直接跳出来
+                if (dd < distance || distance < 0f)
+                {
+                    distance = dd;
+                    nearest = unit;
+                }
+            }
+            return nearest;
+        }
+
+
+#if SERVER
+        public static bool GetNearestStealth(Unit main)
+        {
+            float maxdis = 10f;
+            List<Unit> units = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit unit = units[i];
+                if (unit.IsDisposed || main.Id == unit.Id)
+                {
+                    continue;
+                }
+                float dd = Vector3.Distance(main.Position, unit.Position);
+                if (dd > maxdis || !main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+
+                BuffManagerComponent buffManagerComponent = unit.GetComponent<BuffManagerComponent>();
+                if (buffManagerComponent.HaveBuffByState(StateTypeEnum.Stealth))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+#endif 
+
+
+        /// <summary>
+        /// 在2D平面上生成一个距离中心点2米到10米之间的随机点
+        /// </summary>
+        /// <param name="center">中心点坐标</param>
+        /// <returns>圆环范围内的随机点</returns>
+        public static Vector3 GetRandomPointInRing(Vector3 center, float innerRadius, float outerRadius)
+        {
+            // 圆环内半径（2米）
+            //float innerRadius = 2f;
+            // 圆环外半径（10米）
+            //float outerRadius = 10f;
+
+            // 生成随机角度（0到2π）
+            float angle = RandomHelper.RandomNumberFloat(0f, 3.14f * 2f);
+
+            // 生成随机半径（在2到10米之间）
+            // 注意：直接取线性随机会导致内圈点更密集，使用平方根可以平均分布
+            float radius = Mathf.Sqrt(RandomHelper.RandomNumberFloat(innerRadius * innerRadius, outerRadius * outerRadius));
+
+            // 计算相对于中心点的偏移量
+            float offsetX = radius * Mathf.Cos(angle);
+            float offsetY = radius * Mathf.Sin(angle);
+
+            // 计算最终位置
+            return new Vector3(center.x + offsetX, center.y, center.z + offsetY);
+        }
+
+
+        /// <summary>
+        /// 宠物副本，对位攻击。寻找对面的格子
+        /// </summary>
+        /// <param name="main"></param>
+        /// <returns></returns>
+        public static Unit GetNearestCell(Unit main)
+        {
+            int selfCell = main.GetComponent<NumericComponent>().GetAsInt(NumericType.UnitPositon);
+
+            ////对位攻击顺序
+            List<int> postionAttack = PetPositionAttack[selfCell];
+
+            Unit[] enemyUnit = new Unit[9];
+            List<Unit> units = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit unit = units[i];
+                if (unit.IsDisposed || main.Id == unit.Id)
+                {
+                    continue;
+                }
+                if (!main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+
+                int position = unit.GetComponent<NumericComponent>().GetAsInt(NumericType.UnitPositon);
+                enemyUnit[position] = unit; 
+            }
+
+            for (int i = 0; i < postionAttack.Count; i++)
+            {
+                Unit enemy = enemyUnit[postionAttack[i]];
+                if (enemy != null)
+                {
+                    return enemy;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 服务器使用。不需要找最近的
+        /// </summary>
+        /// <param name="main"></param>
+        /// <param name="maxdis"></param>
+        /// <param name="isMini">是否要最小距离</param>
+        /// <returns></returns>
+        public static Unit GetNearestEnemy(Unit main, float maxdis , bool isMini = false)
+        {
+            Unit nearest = null;
+            float minDistance = maxdis;
+            List<Unit> units = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit unit = units[i];
+                if (unit.IsDisposed || main.Id == unit.Id)
+                {
+                    continue;
+                }
+                float dd = PositionHelper.Distance2D(main, unit);
+                if (dd > maxdis ||  !main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+
+                if (!isMini)
+                {
+                    //找到目标直接跳出来
+                    nearest = unit;
+                    break;
+                }
+
+                if (dd < minDistance)
+                {
+                    minDistance = dd;
+                    nearest = unit;
+                }
+            }
+
+            return nearest;
+        }
+
+
+        public static Unit GetNearestEnemyByPosition(Unit main, Vector3 position, float maxdis)
+        {
+            Unit nearest = null;
+            float minDistance = maxdis;
+            List<Unit> units = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit unit = units[i];
+                if (unit.IsDisposed || main.Id == unit.Id)
+                {
+                    continue;
+                }
+                float dd = Vector3.Distance(position, unit.Position);
+                if (dd > maxdis || !main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+
+                if (dd < minDistance)
+                {
+                    minDistance = dd;
+                    nearest = unit;
+                }
+            }
+
+            return nearest;
+        }
+
+
+        /// <summary>
+        /// 寻找范围内距离自己最近的点
+        /// </summary>
+        /// <param name="main"></param>
+        /// <param name="position"></param>
+        /// <param name="maxdis"></param>
+        /// <returns></returns>
+        public static Unit GetNearestEnemyInRange(Unit main, Vector3 mainposition, float maxdis, Vector3 selfpositon)
+        {
+            Unit nearest = null;
+            float minDistance = maxdis;
+            List<Unit> units = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit unit = units[i];
+                if (unit.IsDisposed || main.Id == unit.Id)
+                {
+                    continue;
+                }
+                float dd = Vector3.Distance(mainposition, unit.Position);
+                if (dd > maxdis || !main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+
+                dd = Vector3.Distance(selfpositon, unit.Position);
+                if (dd < minDistance)
+                {
+                    minDistance = dd;
+                    nearest = unit;
+                }
+            }
+
+            return nearest;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="main"></param>
+        /// <param name="maxdis"></param>
+        /// <param name="numberType"></param>
+        /// <returns></returns>
+        public static List<long> GetNearestEnemyByNumber(Unit main, float maxdis, int number)
+        {
+            List<long> unitIdList = new List<long>();
+            List<EnemyUnitInfo> enemyUnitInfos = new List<EnemyUnitInfo>();
+            List<Unit> units = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit unit = units[i];
+                if (unit.IsDisposed || main.Id == unit.Id)
+                {
+                    continue;
+                }
+
+                float dd = PositionHelper.Distance2D(main, unit);
+                if (dd > maxdis)
+                {
+                    continue;
+                }
+                if (!main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+
+                enemyUnitInfos.Add(new EnemyUnitInfo() { Distacne = dd, UnitID = unit.Id });
+            }
+            if (enemyUnitInfos.Count == 0)
+            {
+                return unitIdList;
+            }
+
+            enemyUnitInfos.Sort(delegate (EnemyUnitInfo a, EnemyUnitInfo b)
+            {
+                return (int)(b.Distacne - a.Distacne);
+            });
+
+            number = enemyUnitInfos.Count >= number ? number : enemyUnitInfos.Count;
+            int[] index = RandomHelper.GetRandoms(number, 0, enemyUnitInfos.Count);
+            for (int i = 0; i < index.Length; i++)
+            {
+                unitIdList.Add(enemyUnitInfos[index[i]].UnitID);
+            }
+
+            return unitIdList;
+        }
+
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="main"></param>
+        /// <param name="maxdis"></param>
+        /// <param name="numberType"></param>
+        /// <returns></returns>
+        public static List<long> GetNearestEnemyByNumber(Unit main, Vector3 targetpos,  float maxdis, int number)
+        {
+            List<long> unitIdList = new List<long>();
+            List<EnemyUnitInfo> enemyUnitInfos = new List<EnemyUnitInfo>();
+            List<Unit> units = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit unit = units[i];
+                if (unit.IsDisposed || main.Id == unit.Id)
+                {
+                    continue;
+                }
+
+                float dd = PositionHelper.Distance2D(targetpos, unit.Position);
+                if (dd > maxdis)
+                {
+                    continue;
+                }
+                if (!main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+
+                enemyUnitInfos.Add(new EnemyUnitInfo() { Distacne = dd, UnitID = unit.Id });
+            }
+            if (enemyUnitInfos.Count == 0)
+            {
+                return unitIdList;
+            }
+
+            enemyUnitInfos.Sort(delegate (EnemyUnitInfo a, EnemyUnitInfo b)
+            {
+                return (int)(b.Distacne - a.Distacne);
+            });
+
+            number = enemyUnitInfos.Count >= number ? number : enemyUnitInfos.Count;
+            int[] index = RandomHelper.GetRandoms(number, 0, enemyUnitInfos.Count);
+            for (int i = 0; i < index.Length; i++)
+            {
+                unitIdList.Add(enemyUnitInfos[index[i]].UnitID);
+            }
+
+            return unitIdList;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="main"></param>
+        /// <param name="maxdis"></param>
+        /// <param name="numberType"></param>
+        /// <returns></returns>
+        public static List<long> GetNearestEnemyIds(Unit main, float maxdis, int numberType)
+        {
+            List<long> unitIdList = new List<long>();
+            List<EnemyUnitInfo> enemyUnitInfos = new List<EnemyUnitInfo>();
+            List<Unit> units = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit unit = units[i];
+                if (unit.IsDisposed || main.Id == unit.Id)
+                {
+                    continue;
+                }
+
+                float dd = PositionHelper.Distance2D(main, unit);
+                if (dd > maxdis)
+                {
+                    continue;
+                }
+                if (!main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+
+                enemyUnitInfos.Add(new EnemyUnitInfo() { Distacne = dd, UnitID = unit.Id });
+            }
+            if (enemyUnitInfos.Count == 0)
+            {
+                return unitIdList;
+            }
+
+            enemyUnitInfos.Sort(delegate (EnemyUnitInfo a, EnemyUnitInfo b)
+            {
+                return (int)(a.Distacne - b.Distacne);
+            });
+            switch (numberType)
+            {
+                case 1:
+                    unitIdList.Add(enemyUnitInfos[RandomHelper.RandomNumber(0, enemyUnitInfos.Count)].UnitID);
+                    break;
+                case 2:
+                    unitIdList.Add(enemyUnitInfos[0].UnitID);
+                    break;
+                case 3:
+                    unitIdList.Add(enemyUnitInfos[enemyUnitInfos.Count - 1].UnitID);
+                    break;
+                case 21:
+                    int number = enemyUnitInfos.Count >= 2 ? 2 : enemyUnitInfos.Count;
+                    int[] index = RandomHelper.GetRandoms(number, 0, enemyUnitInfos.Count);
+                    for (int i = 0; i < index.Length; i++)
+                    {
+                        unitIdList.Add(enemyUnitInfos[index[i]].UnitID);
+                    }
+                    break;
+                case 101:
+                    for (int i = 0; i < enemyUnitInfos.Count; i++)
+                    {
+                        unitIdList.Add(enemyUnitInfos[i].UnitID);
+                    }
+                    break;
+                default:
+                    if (enemyUnitInfos.Count > 0)
+                    {
+                        unitIdList.Add(enemyUnitInfos[0].UnitID);
+                    }
+                    break;
+            }
+
+            return unitIdList;
+        }
+
+        public static List<Unit> GetEnemyUnit(Unit main, int unitType, Vector3 pos, float maxdis)
+        {
+            List<Unit> nearest = new List<Unit>();
+
+            List<Unit> allunits = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < allunits.Count; i++)
+            {
+                Unit unit = allunits[i];
+                if (unit.Type != unitType)
+                {
+                    continue;
+                }
+
+                if (Vector3.Distance(pos, unit.Position) > maxdis)
+                {
+                    continue;
+                }
+                if (!main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+                nearest.Add(unit);
+            }
+            return nearest;
+        }
+
+        public static List<Unit> GetEnemyMonsters(Unit main, Vector3 pos, float maxdis)
+        {
+            List<Unit> nearest = new List<Unit>();
+
+            List<Unit> monsters = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < monsters.Count; i++)
+            {
+                Unit unit = monsters[i];
+                AIComponent aIComponent = monsters[i].GetComponent<AIComponent>();
+                if (aIComponent == null || unit.Type != UnitType.Monster)
+                {
+                    continue;
+                }
+                
+                if (Vector3.Distance(pos, unit.Position) > maxdis)
+                {
+                    continue;
+                }
+                if (!main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+                nearest.Add(unit);  
+            }
+            return nearest;
+        }
+
+        public static List<Unit> GetNearestMonsters(Unit main, float maxdis)
+        {
+            List<Unit> nearest = new List<Unit>();
+            List<Unit> units = main.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit unit = units[i];
+                if (unit.IsDisposed || main.Id == unit.Id || unit.Type!=UnitType.Monster)
+                {
+                    continue;
+                }
+                
+                float dd = PositionHelper.Distance2D(main, unit);
+                if (dd > maxdis)
+                {
+                    continue;
+                }
+                if (!main.IsCanAttackUnit(unit))
+                {
+                    continue;
+                }
+
+                nearest.Add(unit);
+            }
+            return nearest;
+        }
+
+        public struct EnemyUnitInfo
+        {
+            public float Distacne;
+            public long UnitID;
+
+            public EnemyUnitInfo(float dis, long unitid)
+            {
+                this.Distacne = dis;
+                this.UnitID = unitid;
+            }
+        }
+
+        public static bool IsNotSelected(Unit unitForm)
+        {
+            if (unitForm.Type == UnitType.Monster && unitForm.ConfigId == 90000102)
+            {
+                return true;
+            }
+            return false;
+        }
+      
+        public static Unit GetNearestUnit(Unit unitForm, Vector3 position, float maxdis, List<long> hurtids)
+        {
+            Unit nearest = null;
+            float distance = maxdis;
+            List<Unit> units = unitForm.GetParent<UnitComponent>().GetAll();
+            for (int i = 0; i < units.Count; i++)
+            {
+                Unit uu = units[i];
+                if (uu.Id == unitForm.Id || hurtids.Contains(uu.Id))
+                {
+                    continue;
+                }
+                
+                float dd = PositionHelper.Distance2D(position, uu.Position);
+                if (dd > maxdis)
+                {
+                    continue;
+                }
+                if (!unitForm.IsCanAttackUnit(uu))
+                {
+                    continue;
+                }
+                if (dd < distance)
+                {
+                    nearest = uu;
+                    distance = dd;
+                }
+            }
+            return nearest;
+        }
+    }
+}

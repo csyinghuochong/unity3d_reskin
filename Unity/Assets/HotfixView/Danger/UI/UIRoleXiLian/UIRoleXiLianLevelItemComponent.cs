@@ -1,0 +1,119 @@
+﻿using System;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+    public class UIRoleXiLianLevelItemComponent : Entity, IAwake<GameObject>
+    {
+        public GameObject SkillListNode;
+        public GameObject ImageExp;
+        public GameObject ButtonGet;
+        public GameObject ItemListNode;
+        public GameObject TextShuLianDu;
+        public GameObject TextTitle2;
+        public GameObject TextLevelTip;
+        public GameObject TextAttribute;
+        public GameObject TextTitle;
+
+        public GameObject Image_Acvityed;
+        public GameObject GameObject;
+        public float PostionY;
+        public int XiLianLevelId;
+    }
+
+
+    public class UIRoleXiLianLevelItemComponentAwakeSystem : AwakeSystem<UIRoleXiLianLevelItemComponent, GameObject>
+    {
+        public override void Awake(UIRoleXiLianLevelItemComponent self, GameObject go)
+        {
+            self.GameObject = go;
+
+            ReferenceCollector rc = go.GetComponent<ReferenceCollector>();
+            self.SkillListNode = rc.Get<GameObject>("SkillListNode");
+            self.ImageExp = rc.Get<GameObject>("ImageExp");
+            self.TextShuLianDu = rc.Get<GameObject>("TextShuLianDu");
+            self.TextTitle2 =  rc.Get<GameObject>("TextTitle2");
+            self.TextLevelTip = rc.Get<GameObject>("TextLevelTip");
+            self.TextAttribute = rc.Get<GameObject>("TextAttribute");
+            self.TextTitle = rc.Get<GameObject>("TextTitle");
+            self.Image_Acvityed = rc.Get<GameObject>("Image_Acvityed");
+            self.ItemListNode = rc.Get<GameObject>("ItemListNode");
+
+            self.ButtonGet = rc.Get<GameObject>("ButtonGet");
+            ButtonHelp.AddListenerEx(self.ButtonGet, () => { self.OnButtonGet().Coroutine();  });
+        }
+    }
+
+    public static class UIRoleXiLianLevelItemComponentSystem
+    {
+        public static async ETTask OnButtonGet(this UIRoleXiLianLevelItemComponent self)
+        {
+            C2M_ItemXiLianRewardRequest  request = new C2M_ItemXiLianRewardRequest() { XiLianId = self.XiLianLevelId };
+            M2C_ItemXiLianRewardResponse response = (M2C_ItemXiLianRewardResponse)await self.ZoneScene().GetComponent<SessionComponent>().Session.Call(request);
+            if (response.Error!= ErrorCode.ERR_Success)
+            {
+                return;
+            }
+            self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo.XiuLianRewardIds.Add(self.XiLianLevelId);
+            self.OnUpdateUI(self.XiLianLevelId);
+        }
+
+        public static void OnUpdateUI(this UIRoleXiLianLevelItemComponent self, int xilianId)
+        {
+            self.XiLianLevelId = xilianId;
+            EquipXiLianConfig equipXiLianConfig = EquipXiLianConfigCategory.Instance.Get(xilianId);
+            Unit unit = UnitHelper.GetMyUnitFromZoneScene( self.ZoneScene() );
+            int shuliandu = unit.GetComponent<NumericComponent>().GetAsInt(NumericType.ItemXiLianDu);
+
+            UserInfo userInfo = self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo;
+            UICommonHelper.DestoryChild(self.ItemListNode);
+            UICommonHelper.ShowItemList(equipXiLianConfig.RewardList, self.ItemListNode, self, 1f);
+
+            int xilianLevel = EquipXiLianConfigCategory.Instance.Get(xilianId).XiLianLevel;
+            List<KeyValuePairInt> xilianSkill = XiLianHelper.GetLevelSkill(xilianLevel);
+            UICommonHelper.DestoryChild(self.SkillListNode);
+            var path = ABPathHelper.GetUGUIPath("Main/Common/UICommonSkillItem");
+            var bundleGameObject =  ResourcesComponent.Instance.LoadAsset<GameObject>(path);
+            for (int i = 0; i < xilianSkill.Count; i++)
+            {
+                GameObject bagSpace = GameObject.Instantiate(bundleGameObject);
+                UICommonHelper.SetParent(bagSpace, self.SkillListNode);
+                UICommonSkillItemComponent ui_item = self.AddChild<UICommonSkillItemComponent, GameObject>(bagSpace);
+                ui_item.OnUpdateUI((int)xilianSkill[i].Value, ABAtlasTypes.RoleSkillIcon,false,ItemViewHelp.XiLianWeiZhiTip(xilianSkill[i].KeyId));
+            }
+
+            bool actived = shuliandu >= equipXiLianConfig.NeedShuLianDu;
+            self.Image_Acvityed.SetActive(userInfo.XiuLianRewardIds.Contains(xilianId));
+            self.ButtonGet.SetActive(actived && !userInfo.XiuLianRewardIds.Contains(xilianId));
+            self.TextShuLianDu.GetComponent<Text>().text = actived? $"{equipXiLianConfig.NeedShuLianDu}/{equipXiLianConfig.NeedShuLianDu}"
+                    : $"{shuliandu}/{equipXiLianConfig.NeedShuLianDu}";
+            //self.TextShuLianDu.GetComponent<Text>().color = actived ? Color.green : Color.red;
+            float progress = shuliandu * 1f / equipXiLianConfig.NeedShuLianDu;
+            self.ImageExp.GetComponent<Image>().fillAmount = Mathf.Min(progress, 1f);
+            self.TextTitle.GetComponent<Text>().text = equipXiLianConfig.GetTitle();
+            self.TextLevelTip.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("获得{0}，洗炼获得高品质属性概率提升"), equipXiLianConfig.GetTitle());
+            self.TextLevelTip.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 36 : 30;
+
+            self.TextTitle2.GetComponent<RectTransform>().localPosition = GameSettingLanguge.Language == 0? new Vector2(-307.5f, 4.5f) : new Vector2(-362.5f, 4.5f);
+            self.TextLevelTip.GetComponent<RectTransform>().localPosition = GameSettingLanguge.Language == 0? new Vector2(230f, 5.5f) : new Vector2(173f, 1f);
+
+            if (equipXiLianConfig.ProList_Type[0] != 0)
+            {
+                NumericAttribute numericAttribute = ItemViewHelp.AttributeToName[equipXiLianConfig.ProList_Type[0]];
+
+                if (NumericHelp.GetNumericValueType(equipXiLianConfig.ProList_Type[0]) == 2)
+                {
+                    float fvalue = equipXiLianConfig.ProList_Value[0] * 0.001f;
+                    string svalue = fvalue.ToString("0.#####");
+                    self.TextAttribute.GetComponent<Text>().text = $"{ItemViewHelp.GetAttributeName(equipXiLianConfig.ProList_Type[0])} +{svalue}%";
+                }
+                else
+                {
+                    self.TextAttribute.GetComponent<Text>().text = $"{ItemViewHelp.GetAttributeName(equipXiLianConfig.ProList_Type[0])} +{equipXiLianConfig.ProList_Value[0]}";
+                }
+            }
+        }
+    }
+}

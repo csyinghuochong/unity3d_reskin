@@ -1,0 +1,109 @@
+using System;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+
+    public enum TrialEnum : int
+    { 
+        Dungeon = 0,
+        Rank = 1,
+
+        Number,
+    }
+
+    public class UITrialComponent : Entity, IAwake, IDestroy
+    {
+        public GameObject Btn_1;
+        public GameObject SubViewNode;
+        public GameObject FunctionSetBtn;
+
+        public UIPageButtonComponent UIPageButton;
+        public UIPageViewComponent UIPageView;
+    }
+
+    public class UITrialComponentAwake : AwakeSystem<UITrialComponent>
+    {
+        public override void Awake(UITrialComponent self)
+        {
+            ReferenceCollector rc = self.GetParent<UI>().GameObject.GetComponent<ReferenceCollector>();
+            GameObject pageView = rc.Get<GameObject>("SubViewNode");
+
+            UI uiPageView = self.AddChild<UI, string, GameObject>("FunctionBtnSet", pageView);
+            UIPageViewComponent pageViewComponent = uiPageView.AddComponent<UIPageViewComponent>();
+            pageViewComponent.UISubViewList = new UI[(int)TrialEnum.Number];
+            pageViewComponent.UISubViewPath = new string[(int)TrialEnum.Number];
+            pageViewComponent.UISubViewType = new Type[(int)TrialEnum.Number];
+            pageViewComponent.UISubViewPath[(int)TrialEnum.Dungeon] = ABPathHelper.GetUGUIPath("TrialDungeon/UITrialDungeon");
+            pageViewComponent.UISubViewPath[(int)TrialEnum.Rank] = ABPathHelper.GetUGUIPath("TrialDungeon/UITrialRank");
+           
+            pageViewComponent.UISubViewType[(int)TrialEnum.Dungeon] = typeof(UITrialDungeonComponent);
+            pageViewComponent.UISubViewType[(int)TrialEnum.Rank] = typeof(UITrialRankComponent);
+           
+            self.UIPageView = pageViewComponent;
+
+            self.FunctionSetBtn = rc.Get<GameObject>("FunctionSetBtn");
+            UI pageButton = self.AddChild<UI, string, GameObject>("FunctionSetBtn", self.FunctionSetBtn);
+
+            //IOS适配
+            IPHoneHelper.SetPosition(self.FunctionSetBtn, new Vector2(300f, 316f));
+
+            self.UIPageButton = pageButton.AddComponent<UIPageButtonComponent>();
+            self.UIPageButton.SetClickHandler((int page) => {
+                self.OnClickPageButton(page);
+            });
+            self.UIPageButton.OnSelectIndex(0);
+            
+            self.OnLanguageUpdate();
+            DataUpdateComponent.Instance.AddListener(DataType.LanguageUpdate, self);
+        }
+    }
+
+    public class UITrialComponentDestroySystem : DestroySystem<UITrialComponent>
+    {
+        public override void Destroy(UITrialComponent self)
+        {
+            DataUpdateComponent.Instance.RemoveListener(DataType.LanguageUpdate, self);
+        }
+    }
+
+    public static class UITrialComponentSystem
+    {
+        public static void OnLanguageUpdate(this UITrialComponent self)
+        {
+            Transform tt = self.UIPageButton.GetParent<UI>().GameObject.transform;
+
+            int childCount = tt.childCount;
+            for (int i = 0; i < childCount; i++)
+            {
+                Transform transform = tt.transform.GetChild(i);
+
+                Transform XuanZhong = transform.Find("XuanZhong");
+                if (XuanZhong)
+                {
+                    Text text = XuanZhong.GetComponentInChildren<Text>();
+                    if (text)
+                    {
+                        text.fontSize = GameSettingLanguge.Language == 0? 32 : 28;
+                    }
+                }
+
+                Transform WeiXuanZhong = transform.Find("WeiXuanZhong");
+                if (WeiXuanZhong)
+                {
+                    Text text = WeiXuanZhong.GetComponentInChildren<Text>();
+                    if (text)
+                    {
+                        text.fontSize = GameSettingLanguge.Language == 0? 32 : 28;
+                    }
+                }
+            }
+        }
+        
+        public static void OnClickPageButton(this UITrialComponent self, int page)
+        {
+            self.UIPageView.OnSelectIndex(page).Coroutine();
+        }
+    }
+}

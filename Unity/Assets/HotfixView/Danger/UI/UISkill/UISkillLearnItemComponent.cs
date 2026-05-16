@@ -1,0 +1,317 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+    public class UISkillLearnItemComponent : Entity, IAwake<GameObject>,IDestroy
+    {
+
+        public GameObject Reddot;
+        public GameObject ButtonUp;
+        public GameObject ButtonLearn;
+        public GameObject Text_Desc;
+        public GameObject Img_XuanZhong;
+        public GameObject Img_Button;
+        public GameObject Text_LearnLv;
+        public GameObject Node_1;
+        public GameObject Lab_SkillLv;
+        public GameObject Lab_SkillName;
+        public GameObject Img_SkillIcon;
+        public GameObject Img_SkillIconDi;
+        public GameObject Img_SkillIconDi2;
+        public GameObject ButtonMax;
+        public GameObject Lab_NeedSp;
+        public GameObject GameObject;
+
+        public SkillPro SkillPro;
+        public Action<SkillPro> ClickHandler;
+        public List<string> AssetPath = new List<string>();
+        
+        public List<Vector2> UIOldPositionList = new List<Vector2>();
+    }
+
+
+    public class UISkillLearnItemComponentAwakeSystem : AwakeSystem<UISkillLearnItemComponent, GameObject>
+    {
+        public override void Awake(UISkillLearnItemComponent self, GameObject gameObject)
+        {
+            self.GameObject = gameObject;
+            ReferenceCollector rc = gameObject.GetComponent<ReferenceCollector>();
+
+            self.Img_XuanZhong = rc.Get<GameObject>("Img_XuanZhong");
+            self.Img_Button = rc.Get<GameObject>("Img_Button");
+            self.Text_LearnLv = rc.Get<GameObject>("Text_LearnLv");
+            self.Node_1 = rc.Get<GameObject>("Node_1");
+            self.Lab_SkillLv = rc.Get<GameObject>("Lab_SkillLv");
+            self.Lab_SkillName = rc.Get<GameObject>("Lab_SkillName");
+            self.Img_SkillIcon = rc.Get<GameObject>("Img_SkillIcon");
+            self.Img_SkillIconDi = rc.Get<GameObject>("Img_SkillIconDi");
+            self.Img_SkillIconDi2 = rc.Get<GameObject>("Img_SkillIconDi2");
+            self.Text_Desc = rc.Get<GameObject>("Text_Desc");
+            self.ButtonMax = rc.Get<GameObject>("ButtonMax");
+            self.Lab_NeedSp = rc.Get<GameObject>("Lab_NeedSp");
+            self.Reddot = rc.Get<GameObject>("Reddot");
+            self.Reddot.SetActive(false);
+
+            self.Img_Button.GetComponent<Button>().onClick.AddListener(() =>
+            {
+                self.OnImg_Button();
+            });
+
+            self.ButtonUp = rc.Get<GameObject>("ButtonUp");
+            ButtonHelp.AddListenerEx(self.ButtonUp , () =>
+            {
+                self.OnButtonUp();
+            });
+
+            self.ButtonLearn = rc.Get<GameObject>("ButtonLearn");
+            ButtonHelp.AddListenerEx(self.ButtonLearn , () =>
+            {
+                self.OnButtonLearn();
+            });
+            
+            self.StoreUIdData();
+            self.OnLanguageUpdate();
+            DataUpdateComponent.Instance.AddListener(DataType.LanguageUpdate, self);
+        }
+    }
+    public class UISkillLearnItemComponentDestroy: DestroySystem<UISkillLearnItemComponent>
+    {
+        public override void Destroy(UISkillLearnItemComponent self)
+        {
+            for (int i = 0; i < self.AssetPath.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(self.AssetPath[i]))
+                {
+                    ResourcesComponent.Instance.UnLoadAsset(self.AssetPath[i]);
+                }
+            }
+
+            DataUpdateComponent.Instance.RemoveListener(DataType.LanguageUpdate, self);
+            
+            self.AssetPath = null;
+        }
+    }
+    public static class UISkillLearnItemComponentSystem
+    {
+        public static void StoreUIdData(this UISkillLearnItemComponent self)
+        {
+            self.UIOldPositionList.Add(self.Img_SkillIconDi.GetComponent<RectTransform>().localPosition);
+            self.UIOldPositionList.Add(self.Img_SkillIconDi2.GetComponent<RectTransform>().localPosition);
+            self.UIOldPositionList.Add(self.Lab_SkillName.GetComponent<RectTransform>().localPosition);
+            self.UIOldPositionList.Add(self.Lab_SkillLv.GetComponent<RectTransform>().localPosition);
+        }
+
+        public static void OnLanguageUpdate(this UISkillLearnItemComponent self)
+        {
+            if (self.GameObject == null)
+            {
+                return;
+            }
+            
+            Vector2 position = Vector2.zero;
+            position = self.UIOldPositionList[0];
+            if (GameSettingLanguge.Language == 1)
+            {
+                position.x -= 60f;
+            }
+            self.Img_SkillIconDi.GetComponent<RectTransform>().localPosition = position;
+
+            position = Vector2.zero;
+            position = self.UIOldPositionList[1];
+            if (GameSettingLanguge.Language == 1)
+            {
+                position.x -= 60f;
+            }
+            self.Img_SkillIconDi2.GetComponent<RectTransform>().localPosition = position;
+            
+            position = Vector2.zero;
+            position = self.UIOldPositionList[2];
+            if (GameSettingLanguge.Language == 1)
+            {
+                position.x -= 60f;
+            }
+            self.Lab_SkillName.GetComponent<RectTransform>().localPosition = position;
+            
+            position = Vector2.zero;
+            position = self.UIOldPositionList[3];
+            if (GameSettingLanguge.Language == 1)
+            {
+                position.x -= 60f;
+            }
+            self.Lab_SkillLv.GetComponent<RectTransform>().localPosition = position;
+            
+            self.Lab_SkillName.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 40 : 32;
+            self.Lab_SkillLv.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 34 : 29;
+            self.Text_Desc.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 30 : 25;
+        }
+
+        public static void OnButtonUp(this UISkillLearnItemComponent self)
+        {
+            self.OnButtonLearn();
+        }
+
+        public static void ShowReddot(this UISkillLearnItemComponent self)
+        {
+            int skillpoint = self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo.Sp;
+            List<int> uplist = self.ZoneScene().GetComponent<SkillSetComponent>().GetCanUpSkill(skillpoint);
+            self.Reddot.SetActive( uplist.Contains( self.SkillPro.SkillID ) );
+        }
+
+        public static void OnButtonLearn(this UISkillLearnItemComponent self)
+        {
+            UserInfo userInfo = self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo;
+
+            SkillConfig skillConfig_base = SkillConfigCategory.Instance.Get(self.SkillPro.SkillID);
+
+            int playerLv = userInfo.Lv;
+            if (userInfo.Sp < skillConfig_base.CostSPValue)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("技能点不足！!"));
+                return;
+            }
+            if (playerLv < skillConfig_base.LearnRoseLv)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("等级不足！!"));
+                return;
+            }
+            if (userInfo.Gold < skillConfig_base.CostGoldValue)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("金币不足！!"));
+                return;
+            }
+            if (skillConfig_base.NextSkillID == 0)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("已满级！!"));
+                return;
+            }
+
+            self.ZoneScene().GetComponent<SkillSetComponent>().ActiveSkillID(self.SkillPro.SkillID).Coroutine();
+        }
+
+        public static void OnUpdateSkillInfo(this UISkillLearnItemComponent self, int baseskill)
+        {
+            //表现
+            int itemEquipType = UnitHelper.GetEquipType(self.ZoneScene());
+            int occ = self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo.Occ;
+           
+            //逻辑
+            SkillConfig skillConfig_base = SkillConfigCategory.Instance.Get(baseskill);
+
+            string[] skillDesc = Regex.Split(skillConfig_base.GetSkillDescribe(), "\n\n", RegexOptions.IgnoreCase);
+
+            if (skillDesc.Length == 1)
+            {
+                self.Text_Desc.GetComponent<Text>().text = skillDesc[0];
+            }
+            else
+            {
+                if (occ == 5)
+                {
+                    if (itemEquipType == ItemEquipType.Knife)
+                    {
+                        self.Text_Desc.GetComponent<Text>().text = skillDesc[0];
+                    }
+                    else
+                    {
+                        self.Text_Desc.GetComponent<Text>().text = skillDesc[1];
+                    }
+                }
+                else
+                {
+                    if (itemEquipType == ItemEquipType.Sword
+                    || itemEquipType == ItemEquipType.Wand)
+                    {
+                        self.Text_Desc.GetComponent<Text>().text = skillDesc[0];
+                    }
+                    else
+                    {
+                        self.Text_Desc.GetComponent<Text>().text = skillDesc[1];
+                    }
+                }
+            }
+            
+            LayoutRebuilder.ForceRebuildLayoutImmediate(self.Text_Desc.transform.parent.GetComponent<RectTransform>());
+            
+            self.ButtonLearn.SetActive(false);
+            self.ButtonUp.SetActive(false);
+            self.ButtonMax.SetActive(false);
+
+            SkillConfig skillConfig = SkillConfigCategory.Instance.Get(self.SkillPro.SkillID);
+            if (skillConfig.SkillLv == 0)
+            {
+                self.ButtonLearn.SetActive(true);
+            }
+            else 
+            {
+                self.ButtonMax.SetActive(skillConfig.NextSkillID == 0);
+                self.ButtonUp.SetActive(skillConfig.NextSkillID != 0);
+            }
+        }
+
+        public static void OnSetSelected(this UISkillLearnItemComponent self, int SkillId)
+        {
+            self.Img_XuanZhong.SetActive(self.SkillPro.SkillID == SkillId);
+        }
+
+        public static void OnImg_Button(this UISkillLearnItemComponent self)
+        {
+            if (!self.Node_1.activeSelf)
+            {
+                return;
+            }
+
+            self.ClickHandler(self.SkillPro);
+        }
+
+        public static void SetClickHander(this UISkillLearnItemComponent self, Action<SkillPro> action)
+        {
+            self.ClickHandler = action;
+        }
+
+        public static void OnUpdateUI(this UISkillLearnItemComponent self, SkillPro skillPro)
+        {
+            self.SkillPro = skillPro;
+
+            int playerLv = self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo.Lv;
+            SkillConfig skillBaseConfig = SkillConfigCategory.Instance.Get(skillPro.SkillID);
+
+            self.Lab_NeedSp.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("需要技能点: {0}"), skillBaseConfig.CostSPValue);
+            
+            BagComponent bagComponent = self.ZoneScene().GetComponent<BagComponent>();
+            SkillSetComponent skillSetComponent = self.ZoneScene().GetComponent<SkillSetComponent>();
+
+            int weaponskill = SkillHelp.GetWeaponSkill(self.SkillPro.SkillID, UnitHelper.GetEquipType(self.ZoneScene()), skillSetComponent.SkillList);
+            SkillConfig skillWeaponConfig = SkillConfigCategory.Instance.Get( weaponskill);
+
+            int baseskill = SkillHelp.GetBaseSkill(weaponskill);
+
+            string path =ABPathHelper.GetAtlasPath_2(ABAtlasTypes.RoleSkillIcon, skillWeaponConfig.SkillIcon);
+            Sprite sp = ResourcesComponent.Instance.LoadAsset<Sprite>(path);
+            if (!self.AssetPath.Contains(path))
+            {
+                self.AssetPath.Add(path);
+            }
+            self.Lab_SkillName.GetComponent<Text>().text = skillWeaponConfig.GetSkillName();
+            self.Img_SkillIcon.GetComponent<Image>().sprite = sp;
+
+            self.Lab_SkillLv.GetComponent<Text>().text = GameSettingLanguge.LoadLocalization("等级")+ " " + skillWeaponConfig.SkillLv.ToString();
+
+            if (skillBaseConfig.SkillLv == 0)
+            {
+                self.Lab_SkillLv.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("{0}级以后学习"), skillBaseConfig.LearnRoseLv);
+                UICommonHelper.SetImageGray(self.Img_SkillIcon, true);
+            }
+            else
+            {
+                UICommonHelper.SetImageGray(self.Img_SkillIcon, false);
+            }
+
+            self.OnUpdateSkillInfo(baseskill);
+            self.ShowReddot();
+        }
+    }
+}

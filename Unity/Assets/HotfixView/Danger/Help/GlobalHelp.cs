@@ -1,0 +1,255 @@
+﻿using cn.sharesdk.unity3d;
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace ET
+{
+    public static class GlobalHelp
+    {
+
+        public static Dictionary<string, Shader> ShaderList = new Dictionary<string, Shader>();
+
+        //"Unit_BumpDistort"
+        public static Shader FindShaderFormMat(string path)
+        {
+            Shader shader = null;
+            ShaderList.TryGetValue(path, out shader);
+            if (shader == null)
+            {
+                shader = UICommonHelper.FindShaderFormMat(path);
+                if (ShaderList.ContainsKey(path))
+                {
+                    ShaderList[path] = shader;
+                }
+                else
+                {
+                    ShaderList.Add(path, shader);
+                }
+            }
+            return shader;
+        }
+
+        public static bool IsEditorMode
+        {
+            get { return GameObject.Find("Global").GetComponent<Init>().EditorMode; }
+        }
+
+        public static bool IsBanHaoMode
+        {
+            get { return GameObject.Find("Global").GetComponent<Init>().VersionMode == VersionMode.BanHao; }
+        }
+
+        public static bool IsOutNetMode
+        {
+            get { return GameObject.Find("Global").GetComponent<Init>().OueNetMode; }
+        }
+
+        public static bool IsInnerNetMode
+        {
+            get { return GameObject.Find("Global").GetComponent<Init>().OueNetMode ==false; }
+        }
+
+        public static VersionMode VersionMode
+        {
+            get { return GameObject.Find("Global").GetComponent<Init>().VersionMode; }
+        }
+
+        public static CodeMode GetCodeMode
+        {
+            get { return GameObject.Find("Global").GetComponent<Init>().CodeMode; }
+        }
+
+        public static void FenXiang(FenXiangContent fenXiangContent)
+        {
+            GameObject.Find("Global").GetComponent<Init>().FenXiang(fenXiangContent);
+        }
+
+        public static void SSDKOperate(string shareType)
+        {
+            ShareSDK ssdk = GameObject.Find("Global").GetComponent<Init>().ssdk;
+        }
+
+        public static void PemoveAccount(string shareType)
+        {
+            GameObject.Find("Global").GetComponent<Init>().PemoveAccount(shareType);
+        }
+
+        public static void TapTapShare(string orderInfo)
+        {
+            GameObject.Find("Global").GetComponent<Init>().TapTapShare(orderInfo);
+        }
+
+        public static void AliPay(string orderInfo)
+        {
+            GameObject.Find("Global").GetComponent<Init>().AliPay(orderInfo);
+        }
+
+        public static void WeChatPay(string orderInfo)
+        {
+            GameObject.Find("Global").GetComponent<Init>().WeChatPay(orderInfo);
+        }
+
+        public static int BigVersion = -1;
+        public static int GetBigVersion()
+        {
+            if (BigVersion != -1)
+            {
+                return BigVersion;
+            }
+
+#if UNITY_IPHONE || UNITY_IOS
+            BigVersion =  GameObject.Find("Global").GetComponent<Init>().BigVersionIOS;
+            return BigVersion;
+#else
+            BigVersion =  GameObject.Find("Global").GetComponent<Init>().BigVersion;
+            return BigVersion;
+#endif
+        }
+
+        /// <summary>
+        /// 0 默认 taptap1  QQ2 platform3 小说推广 platform4备用  TikTok5  TikTokMuBao6(抖音母包) Google7  TikTokGuanFu8  渠道包100  ios20001
+        /// </summary>
+        /// <returns></returns>
+        public static int GetPlatform()
+        {
+#if UNITY_IPHONE || UNITY_IOS
+            return 20001;
+#else
+            if (GetBigVersion() < 15)
+            {
+                return 0;
+            }
+            if (GetBigVersion() > 18)
+            {
+                
+            }
+            return GameObject.Find("Global").GetComponent<Init>().Platform;
+#endif
+        }
+
+        public static void OnButtonGetCode(string phone)
+        {
+            GameObject.Find("Global").GetComponent<SMSSDemo>().OnButtonGetCode(phone);
+        }
+
+        public static void OnButtonCommbitCode(Action<string> action, string phone, string code)
+        {
+
+            //#if UNITY_IPHONE || UNITY_IOS
+            //           GameObject.Find("Global").GetComponent<SMSSDemo>().OnButtonCommbitCode(code);
+            //#else
+            //            EventType.SMSSVerify.Instance.Phone = phone;
+            //            EventType.SMSSVerify.Instance.Code = code;
+            //            EventType.SMSSVerify.Instance.Action = action;
+            //            Game.EventSystem.PublishClass(EventType.SMSSVerify.Instance);
+            //#endif
+
+            EventType.SMSSVerify.Instance.Phone = phone;
+            EventType.SMSSVerify.Instance.Code = code;
+            EventType.SMSSVerify.Instance.Action = action;
+            Game.EventSystem.PublishClass(EventType.SMSSVerify.Instance);
+        }
+
+        public static void OnButtonGetPhoneNum( )
+        {
+            GameObject.Find("Global").GetComponent<Init>().OnGetPhoneNum();
+        }
+
+
+        public static void OnGooglePurchase(int rmb)
+        {
+            string product = $"pay_{rmb}";
+            GameObject.Find("Global").GetComponent<IAPManager>().BuyProduct_WJ(product);
+        }
+
+        public static void InitGooglePurchase()
+        {
+            string products = "pay_1@pay_5@pay_10@pay_20@pay_30@pay_50@pay_80@pay_100";
+            GameObject.Find("Global").GetComponent<IAPManager>().InitializePurchasing(products);
+        }
+        
+        public static void OnIOSPurchase(int rmb)
+        {
+            string product =  $"{rmb}WJ";
+            GameObject.Find("Global").GetComponent<PurchasingManager>().OnIOSPurchase(product);
+        }
+
+        //testpay1  商品ID
+        public static void OnIOSPurchaseTest( )
+        {
+            string product = "testpay1";
+            GameObject.Find("Global").GetComponent<PurchasingManager>().OnIOSPurchase(product);
+        }
+
+        public static void InitIOSPurchase( )
+        {
+            //builder.AddProduct("6WJ", ProductType.Consumable);
+            //builder.AddProduct("30WJ", ProductType.Consumable);
+            //builder.AddProduct("50WJ", ProductType.Consumable);
+            //builder.AddProduct("98WJ", ProductType.Consumable);
+            //builder.AddProduct("198WJ", ProductType.Consumable);
+            //builder.AddProduct("298WJ", ProductType.Consumable);
+            //builder.AddProduct("488WJ", ProductType.Consumable);
+            //builder.AddProduct("488SG", ProductType.Consumable);
+            //builder.AddProduct("648WJ", ProductType.Consumable);
+            string products = "6WJ_30WJ_50WJ_98WJ_198WJ_298WJ_488WJ_488SG_648WJ_testpay1";
+            GameObject.Find("Global").GetComponent<PurchasingManager>().InitProduct(products);
+        }
+
+        public static void OnRechageSucess(Scene zoneScene, int payType, int amount, int now)
+        {
+#if UNITY_ANDROID
+            if (amount <= 0)
+            {
+                return;
+            }
+
+            int r_num = RandomHelper.RandomNumber(1000, 9999);
+            string nowTime = TimeHelper.ServerNow().ToString();
+            string orderId = $"Pay_{r_num}_{nowTime}_{amount}";
+            string product = $"{amount}WJ";
+            string payment = "pay";
+            if (payType == PayTypeEnum.AliPay)
+            {
+                orderId = $"AliPay_{r_num}_{nowTime}_{amount}";
+                payment = "alipay";
+            }
+
+            if (payType == PayTypeEnum.WeiXinPay)
+            {
+                orderId = $"WXPay_{r_num}_{nowTime}_{amount}";
+                payment = "wechat";
+            }
+
+            if (GlobalHelp.GetPlatform() == 1)
+            {
+
+                TapSDKHelper.OnCharge(orderId, product, amount * 100, "CNY", payment, "{\"on_sell\":true}");
+                TapSDKHelper.UserUpdate_rechargeNumber(now);
+            }
+
+            if (GlobalHelp.GetPlatform() == 8)
+            {
+                AccountInfoComponent accountInfoComponent = zoneScene.GetComponent<AccountInfoComponent>();
+                EventType.TikTokOnPay.Instance.ZoneScene = zoneScene;
+                EventType.TikTokOnPay.Instance.GameUserID = accountInfoComponent.Account;
+                EventType.TikTokOnPay.Instance.GameRoleID = accountInfoComponent.CurrentRoleId.ToString();
+                EventType.TikTokOnPay.Instance.GameOrderID = orderId;
+                EventType.TikTokOnPay.Instance.TotalAmount = amount;
+                EventType.TikTokOnPay.Instance.ProductID = product;
+                EventType.TikTokOnPay.Instance.ProductName = product;
+                EventType.TikTokOnPay.Instance.ProductDesc = product;
+
+                EventSystem.Instance.PublishClass(EventType.TikTokOnPay.Instance);
+            }
+#endif
+        }
+
+        //public static int GetVersion()
+        //{
+        //    int versioncode = libx.Versions.LoadVersion(Application.persistentDataPath + '/' + libx.Versions.Filename);
+        //    return versioncode > 0 ? versioncode : 1;
+        //}
+    }
+}

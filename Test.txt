@@ -1,1 +1,20 @@
-这个文件内容修改完成
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\Cartoon.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\E3D-AirDistort-Noise-Mask.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\E3D-distortion.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\E3DEffect-C1-Add.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\E3DEffect-C2-Add-Glow.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\E3DVFX-3T-UV-VC-Add.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\E3D_EF_31_ADD_Top.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\E3D_EF_31_ADD_Top2.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\Ill_HighLight.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\Ill_RimLight.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\MyGPUInstance.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\Outline.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\Particle Alpha Blend1.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\SimpleAlpha.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\SimpleShader.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\ToonBasicOutline.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\UIAdditive.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\UI_Hui.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Shader\URPUnlitShaderBasic.shader
+E:/GitLDYQReSkin/Unity\Assets\Art\Effects\BackBlur\BackBlur.shader

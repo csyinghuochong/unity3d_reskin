@@ -1,0 +1,137 @@
+﻿using System;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+    public enum PetEggEnum : int
+    {
+        PetEggList = 0,
+        PetChouKa = 1,
+        PetEggDuiHuan = 2,
+        PetEggChouKa = 3,
+        PetHeXinChouKa = 4,
+
+        Num,
+    }
+
+    public class UIPetEggComponent : Entity, IAwake, IDestroy
+    {
+        public GameObject Btn_Type_5;
+        public UIPageViewComponent UIPageView;
+        public GameObject FunctionSetBtn;
+        public UIPageButtonComponent UIPageButton;
+    }
+
+
+    public class UIPetEggComponentAwakeSystem : AwakeSystem<UIPetEggComponent>
+    {
+        public override void Awake(UIPetEggComponent self)
+        {
+            ReferenceCollector rc = self.GetParent<UI>().GameObject.GetComponent<ReferenceCollector>();
+
+            GameObject pageView = rc.Get<GameObject>("SubViewNode");
+            UI uiPageView = self.AddChild<UI, string, GameObject>("FunctionBtnSet", pageView);
+            UIPageViewComponent pageViewComponent = uiPageView.AddComponent<UIPageViewComponent>();
+            pageViewComponent.UISubViewList = new UI[(int)PetEggEnum.Num];
+            pageViewComponent.UISubViewPath = new string[(int)PetEggEnum.Num];
+            pageViewComponent.UISubViewType = new Type[(int)PetEggEnum.Num];
+
+            pageViewComponent.UISubViewPath[(int)PetEggEnum.PetEggList] = ABPathHelper.GetUGUIPath("Main/PetEgg/UIPetEggList");
+            pageViewComponent.UISubViewPath[(int)PetEggEnum.PetChouKa] = ABPathHelper.GetUGUIPath("Main/PetEgg/UIPetChouKa");
+            pageViewComponent.UISubViewPath[(int)PetEggEnum.PetEggDuiHuan] = ABPathHelper.GetUGUIPath("Main/PetEgg/UIPetEggDuiHuan");
+            pageViewComponent.UISubViewPath[(int)PetEggEnum.PetEggChouKa] = ABPathHelper.GetUGUIPath("Main/PetEgg/UIPetEggChouKa");
+            pageViewComponent.UISubViewPath[(int)PetEggEnum.PetHeXinChouKa] = ABPathHelper.GetUGUIPath("Main/PetEgg/UIPetHeXinChouKa");
+
+            pageViewComponent.UISubViewType[(int)PetEggEnum.PetEggList] = typeof(UIPetEggListComponent);
+            pageViewComponent.UISubViewType[(int)PetEggEnum.PetChouKa] = typeof(UIPetChouKaComponent);
+            pageViewComponent.UISubViewType[(int)PetEggEnum.PetEggDuiHuan] = typeof(UIPetEggDuiHuanComponent);
+            pageViewComponent.UISubViewType[(int)PetEggEnum.PetEggChouKa] = typeof(UIPetEggChouKaComponent);
+            pageViewComponent.UISubViewType[(int)PetEggEnum.PetHeXinChouKa] = typeof(UIPetHeXinChouKaComponent);
+            self.UIPageView = pageViewComponent;
+
+            self.Btn_Type_5 = rc.Get<GameObject>("Btn_Type_5");
+            self.Btn_Type_5.SetActive(true );
+
+            //IOS适配
+            self.FunctionSetBtn = rc.Get<GameObject>("FunctionSetBtn");
+            IPHoneHelper.SetPosition(self.FunctionSetBtn, new Vector2(300f, 316f));
+
+            GameObject FunctionSetBtn = rc.Get<GameObject>("FunctionSetBtn");
+            UI PageButton = self.AddChild<UI, string, GameObject>("FunctionSetBtn", FunctionSetBtn);
+            UIPageButtonComponent uIPageButtonComponent = PageButton.AddComponent<UIPageButtonComponent>();
+            self.UIPageButton = uIPageButtonComponent;
+            uIPageButtonComponent.SetClickHandler((int page) => {
+                self.OnClickPageButton(page);
+            });
+            uIPageButtonComponent.OnSelectIndex(0);
+            
+            self.OnLanguageUpdate();
+            DataUpdateComponent.Instance.AddListener(DataType.LanguageUpdate, self);
+        }
+    }
+
+    public class UIPetEggComponentDestroySystem : DestroySystem<UIPetEggComponent>
+    {
+        public override void Destroy(UIPetEggComponent self)
+        {
+            DataUpdateComponent.Instance.RemoveListener(DataType.LanguageUpdate, self);
+        }
+    }
+    
+    public static class UIPetEggComponentSystem
+    {
+        public static void OnLanguageUpdate(this UIPetEggComponent self)
+        {
+            Transform tt = self.UIPageButton.GetParent<UI>().GameObject.transform;
+
+            int childCount = tt.childCount;
+            for (int i = 0; i < childCount; i++)
+            {
+                Transform transform = tt.transform.GetChild(i);
+
+                Transform XuanZhong = transform.Find("XuanZhong");
+                if (XuanZhong)
+                {
+                    Text text = XuanZhong.GetComponentInChildren<Text>();
+                    if (text)
+                    {
+                        text.fontSize = GameSettingLanguge.Language == 0? 32 : 28;
+                    }
+                }
+
+                Transform WeiXuanZhong = transform.Find("WeiXuanZhong");
+                if (WeiXuanZhong)
+                {
+                    Text text = WeiXuanZhong.GetComponentInChildren<Text>();
+                    if (text)
+                    {
+                        text.fontSize = GameSettingLanguge.Language == 0? 32 : 28;
+                    }
+                }
+            }
+        }
+        
+        public static void OnClickPageButton(this UIPetEggComponent self, int page)
+        {
+            self.UIPageView.OnSelectIndex(page).Coroutine();
+        }
+
+        public static void OnRolePetEggOpen(this UIPetEggComponent self)
+        {
+            self.UIPageView.UISubViewList[(int)PetEggEnum.PetEggList].GetComponent<UIPetEggListComponent>().UpdatePetEggUI();
+        }
+
+        public static void OnUpdateLuckly(this UIPetEggComponent self)
+        {
+            UI ui = self.UIPageView.UISubViewList[(int)PetEggEnum.PetEggChouKa];
+            ui?.GetComponent<UIPetEggChouKaComponent>().OnUpdateInfo();
+        }
+
+        public static void UpdateChouKaTime(this UIPetEggComponent self)
+        {
+            UI ui = self.UIPageView.UISubViewList[(int)PetEggEnum.PetChouKa];
+            ui.GetComponent<UIPetChouKaComponent>().UpdateChouKaTime();
+        }
+    }
+}

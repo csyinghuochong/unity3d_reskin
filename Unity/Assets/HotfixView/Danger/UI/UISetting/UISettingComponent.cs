@@ -1,0 +1,137 @@
+﻿using System;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+
+    public enum SettingEnum : int
+    { 
+        Game = 0,
+        Title = 1,  
+        GuaJi =2,
+        Fashion = 3,
+
+        Number,
+    }
+
+    public class UISettingComponent : Entity, IAwake, IDestroy
+    {
+
+        public GameObject Btn_Type_4;
+        public GameObject SubViewNode;
+        public GameObject FunctionSetBtn;
+
+        public UIPageViewComponent UIPageView;
+        public UIPageButtonComponent UIPageButton;
+    }
+
+
+    public class UISettingComponentAwakeSystem : AwakeSystem<UISettingComponent>
+    {
+        public override void Awake(UISettingComponent self)
+        {
+            ReferenceCollector rc = self.GetParent<UI>().GameObject.GetComponent<ReferenceCollector>();
+
+            //IOS适配
+            IPHoneHelper.SetPosition(rc.Get<GameObject>("FunctionSetBtn"), new Vector2(300f, 316f));
+
+            GameObject pageView = rc.Get<GameObject>("SubViewNode");
+            UI uiPageView = self.AddChild<UI, string, GameObject>("FunctionBtnSet", pageView);
+            UIPageViewComponent pageViewComponent = uiPageView.AddComponent<UIPageViewComponent>();
+            pageViewComponent.UISubViewList = new UI[(int)SettingEnum.Number];
+            pageViewComponent.UISubViewPath = new string[(int)SettingEnum.Number];
+            pageViewComponent.UISubViewType = new Type[(int)SettingEnum.Number];
+            pageViewComponent.UISubViewPath[(int)SettingEnum.Game] = ABPathHelper.GetUGUIPath("Main/Setting/UISettingGame");
+            pageViewComponent.UISubViewPath[(int)SettingEnum.Title] = ABPathHelper.GetUGUIPath("Main/Setting/UISettingTitle");
+            pageViewComponent.UISubViewPath[(int)SettingEnum.GuaJi] = ABPathHelper.GetUGUIPath("Main/Setting/UISettingGuaJi");
+            pageViewComponent.UISubViewPath[(int)SettingEnum.Fashion] = ABPathHelper.GetUGUIPath("Main/Fashion/UIFashionShow");
+
+            pageViewComponent.UISubViewType[(int)SettingEnum.Game] = typeof(UISettingGameComponent);
+            pageViewComponent.UISubViewType[(int)SettingEnum.Title] = typeof(UISettingTitleComponent);
+            pageViewComponent.UISubViewType[(int)SettingEnum.GuaJi] = typeof(UISettingGuaJiComponent);
+            pageViewComponent.UISubViewType[(int)SettingEnum.Fashion] = typeof(UIFashionShowComponent);
+
+            self.UIPageView = pageViewComponent;
+            self.FunctionSetBtn = rc.Get<GameObject>("FunctionSetBtn");
+            UI pageButton = self.AddChild<UI, string, GameObject>("FunctionSetBtn", self.FunctionSetBtn);
+
+            //IOS适配
+            IPHoneHelper.SetPosition(self.FunctionSetBtn, new Vector2(300f, 316f));
+
+            self.UIPageButton = pageButton.AddComponent<UIPageButtonComponent>();
+            self.UIPageButton.SetClickHandler((int page) => {
+                self.OnClickPageButton(page);
+            });
+            self.UIPageButton.OnSelectIndex(0);
+            
+            self.OnLanguageUpdate();
+            DataUpdateComponent.Instance.AddListener(DataType.LanguageUpdate, self);
+        }
+    }
+
+    public class UISettingComponentDestroySystem : DestroySystem<UISettingComponent>
+    {
+        public override void Destroy(UISettingComponent self)
+        {
+            DataUpdateComponent.Instance.RemoveListener(DataType.LanguageUpdate, self);
+        }
+    }
+    
+    public static class UISettingComponentSystem
+    {
+        public static void OnLanguageUpdate(this UISettingComponent self)
+        {
+            Transform tt = self.UIPageButton.GetParent<UI>().GameObject.transform;
+
+            int childCount = tt.childCount;
+            for (int i = 0; i < childCount; i++)
+            {
+                Transform transform = tt.transform.GetChild(i);
+
+                Transform XuanZhong = transform.Find("XuanZhong");
+                if (XuanZhong)
+                {
+                    Text text = XuanZhong.GetComponentInChildren<Text>();
+                    if (text)
+                    {
+                        text.fontSize = GameSettingLanguge.Language == 0? 32 : 28;
+                    }
+                }
+
+                Transform WeiXuanZhong = transform.Find("WeiXuanZhong");
+                if (WeiXuanZhong)
+                {
+                    Text text = WeiXuanZhong.GetComponentInChildren<Text>();
+                    if (text)
+                    {
+                        text.fontSize = GameSettingLanguge.Language == 0? 32 : 28;
+                    }
+                }
+            }
+        }
+
+        public static void OnBeforeClose(this UISettingComponent self)
+        {
+            UI uI = self.UIPageView.UISubViewList[(int)SettingEnum.Game];
+            if (uI != null)
+            { 
+                uI.GetComponent<UISettingGameComponent>().OnBeforeClose();  
+            }
+        }
+
+        public static void OnTitleUse(this UISettingComponent self)
+        {
+            UI uI = self.UIPageView.UISubViewList[(int)SettingEnum.Title];
+            if (uI != null)
+            {
+                uI.GetComponent<UISettingTitleComponent>().OnUpdateUI();
+            }
+        }
+
+        public static void OnClickPageButton(this UISettingComponent self, int page)
+        {
+            self.UIPageView.OnSelectIndex(page).Coroutine();
+        }
+    }
+}

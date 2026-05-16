@@ -1,0 +1,146 @@
+﻿using System;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+    public class UIUnionCreateComponent : Entity, IAwake<GameObject>, IDestroy
+    {
+        public GameObject Img_Diamond;
+        public GameObject InputFieldName;
+        public GameObject Text_Contion2;
+        public GameObject Text_Contion1;
+        public GameObject Btn_Create;
+        public GameObject InputFieldPurpose;
+        public GameObject GameObject;
+    }
+
+
+    public class UIUnionCreateComponentAwakeSystem : AwakeSystem<UIUnionCreateComponent, GameObject>
+    {
+        public override void Awake(UIUnionCreateComponent self, GameObject gameObject)
+        {
+            self.GameObject = gameObject;
+            ReferenceCollector rc = gameObject.GetComponent<ReferenceCollector>();
+
+            self.Img_Diamond = rc.Get<GameObject>("Img_Diamond");
+            
+            self.InputFieldName = rc.Get<GameObject>("InputFieldName");
+            self.InputFieldName.GetComponent<InputField>().onValueChanged.AddListener((string text) => { self.CheckSensitiveWords(self.InputFieldName); });
+
+            self.Text_Contion2 = rc.Get<GameObject>("Text_Contion2");
+            self.Text_Contion1 = rc.Get<GameObject>("Text_Contion1");
+
+            self.Btn_Create = rc.Get<GameObject>("Btn_Create");
+            ButtonHelp.AddListenerEx( self.Btn_Create, () => { self.RequestCreateUnion().Coroutine(); } );
+
+            self.InputFieldPurpose = rc.Get<GameObject>("InputFieldPurpose");
+            self.InputFieldPurpose.GetComponent<InputField>().onValueChanged.AddListener((string text) => { self.CheckSensitiveWords(self.InputFieldPurpose); });
+
+            self.OnLanguageUpdate();
+            DataUpdateComponent.Instance.AddListener(DataType.LanguageUpdate, self);
+            
+            self.OnInitUI();
+        }
+    }
+
+    public class UIUnionCreateComponentDestroySystem : DestroySystem<UIUnionCreateComponent>
+    {
+        public override void Destroy(UIUnionCreateComponent self)
+        {
+            DataUpdateComponent.Instance.RemoveListener(DataType.LanguageUpdate, self);
+        }
+    }
+    
+    public static class UIUnionCreateComponentSystem
+    {
+        public static void OnLanguageUpdate(this UIUnionCreateComponent self)
+        {
+            self.Img_Diamond.SetActive(GameSettingLanguge.Language == 0);
+            self.Text_Contion1.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 34 : 30;
+            self.Text_Contion2.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 34 : 30;
+        }
+
+        public static void CheckSensitiveWords(this UIUnionCreateComponent self, GameObject InputField)
+        {
+            string text_new = "";
+            string text_old = InputField.GetComponent<InputField>().text;
+            MaskWordHelper.Instance.IsContainSensitiveWords(ref text_old, out text_new);
+            InputField.GetComponent<InputField>().text = text_old;
+        }
+
+        public static void OnInitUI(this UIUnionCreateComponent self)
+        {
+            self.Text_Contion1.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("1. 角色等级达到{0}级"), GlobalValueConfigCategory.Instance.Get(21).Value);
+            self.Text_Contion2.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("2. 消耗{0}钻石"), GlobalValueConfigCategory.Instance.Get(22).Value);
+        }
+
+        public static async ETTask RequestCreateUnion(this UIUnionCreateComponent self)
+        {
+            string unionName = self.InputFieldName.GetComponent<InputField>().text;
+            bool mask = MaskWordHelper.Instance.IsContainSensitiveWords(unionName);
+            if (mask || !StringHelper.IsSpecialChar(unionName))
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("家族名字有特殊字符！"));
+                return;
+            }
+            if (unionName.Length > 7)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("家族名字最多七个字！"));
+                return;
+            }
+
+            string purpose = self.InputFieldPurpose.GetComponent<InputField>().text;
+            mask = MaskWordHelper.Instance.IsContainSensitiveWords(purpose);
+            //if (mask || !StringHelper.IsSpecialChar(purpose) || purpose.Length >= 200)
+            //{
+            //    FloatTipManager.Instance.ShowFloatTip("请重新输入！");
+            //    return;
+            //}
+            if (mask )
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("宣言有特殊字符！"));
+                return;
+            }
+            if (purpose.Length >= 200)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("宣言内容过长！"));
+                return;
+            }
+
+            Unit unit = UnitHelper.GetMyUnitFromZoneScene( self.ZoneScene() );
+            if (unit.GetComponent<NumericComponent>().GetAsLong(NumericType.UnionId_0) != 0)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("请先退出公会！"));
+                return;
+            }
+            UserInfo userInfo = self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo;
+            int needLevel = int.Parse(GlobalValueConfigCategory.Instance.Get(21).Value);
+            int needDiamond = int.Parse(GlobalValueConfigCategory.Instance.Get(22).Value);
+            if (userInfo.Lv < needLevel )
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("等级不足！"));
+                return;
+            }
+            if (userInfo.Diamond < needDiamond)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("钻石不足！"));
+                return;
+            }
+
+            C2M_UnionCreateRequest c2M_ItemHuiShouRequest = new C2M_UnionCreateRequest()
+            {
+                 UnionName = unionName,
+                 UnionPurpose = purpose
+            };
+            M2C_UnionCreateResponse r2c_roleEquip = (M2C_UnionCreateResponse)await self.DomainScene().GetComponent<SessionComponent>().Session.Call(c2M_ItemHuiShouRequest);
+            if (r2c_roleEquip.Error != ErrorCode.ERR_Success)
+            {
+                return;
+            }
+
+            UIHelper.GetUI(self.ZoneScene(), UIType.UIFriend)?.GetComponent<UIFriendComponent>().UIPageButtonComponent.OnSelectIndex(4);
+        }
+
+    }
+}

@@ -1,0 +1,279 @@
+﻿using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+namespace ET
+{
+    public class UISkillSetComponent : Entity, IAwake,IDestroy
+    {
+        public GameObject SkillIconItem;
+        public GameObject SkillIPositionSet;
+
+        public GameObject SkillListNode;
+        public GameObject UISkillSetItem;
+        public GameObject ItemListNode;
+
+        public List<UISkillSetItemComponent> SkillUIList = new List<UISkillSetItemComponent>();
+        public List<UIItemComponent> ItemUIList = new List<UIItemComponent>();
+        public List<GameObject> SkillSetIconList = new List<GameObject>();
+        public GameObject SkillIconItemCopy;
+        public Vector2 localPoint;
+        public List<string> AssetPath = new List<string>();
+    }
+
+
+    public class UISkillSetComponentAwakeSystem : AwakeSystem<UISkillSetComponent>
+    {
+        public override void Awake(UISkillSetComponent self)
+        {
+            self.SkillUIList.Clear();
+            self.ItemUIList.Clear();
+            self.SkillSetIconList.Clear();
+
+            ReferenceCollector rc = self.GetParent<UI>().GameObject.GetComponent<ReferenceCollector>();
+
+            self.SkillIconItem = rc.Get<GameObject>("SkillIconItem");
+            self.SkillIconItem.SetActive(false);
+            self.SkillIPositionSet = rc.Get<GameObject>("SkillIPositionSet");
+            self.SkillListNode = rc.Get<GameObject>("SkillListNode");
+            self.UISkillSetItem = rc.Get<GameObject>("UISkillSetItem");
+            self.UISkillSetItem.SetActive(false);
+            self.ItemListNode = rc.Get<GameObject>("ItemListNode");
+
+            self.GetParent<UI>().OnUpdateUI = self.UpdateSkillListUI;
+            
+            self.OnLanguageUpdate();
+
+            self.InitSkillSetIcons();
+            self.OnSkillSetting();
+            self.UpdateItemSkillUI().Coroutine();
+        }
+    }
+    public class UISkillSetComponentDestroy: DestroySystem<UISkillSetComponent>
+    {
+        public override void Destroy(UISkillSetComponent self)
+        {
+            for (int i = 0; i < self.AssetPath.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(self.AssetPath[i]))
+                {
+                    ResourcesComponent.Instance.UnLoadAsset(self.AssetPath[i]);
+                }
+            }
+
+            self.AssetPath = null;
+        }
+    }
+
+    public static class UUISkillSetComponentSystem
+    {
+        public static void OnLanguageUpdate(this UISkillSetComponent self)
+        {
+            ReferenceCollector rc = self.GetParent<UI>().GameObject.GetComponent<ReferenceCollector>();
+
+            rc.Get<GameObject>("Text_Text3").GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 46 : 36;
+        }
+
+        public static void InitSkillSetIcons(this UISkillSetComponent self)
+        {
+            int childCount = self.SkillIPositionSet.transform.childCount;
+            for (int i = 0; i < childCount; i++)
+            {
+                GameObject go = GameObject.Instantiate(self.SkillIconItem);
+                go.SetActive(false);
+                UICommonHelper.SetParent(go, self.SkillIPositionSet.transform.GetChild(i).gameObject);
+                self.SkillSetIconList.Add(go);
+                //self.SkillIPositionSet.transform.GetChild(i).gameObject.GetComponent<Image>().enabled = false;
+            }
+        }
+
+        public static void OnSkillSetting(this UISkillSetComponent self)
+        {
+            SkillSetComponent skillSetComponent = self.ZoneScene().GetComponent<SkillSetComponent>();
+            for (int i = 0; i < self.SkillSetIconList.Count; i++)
+            {
+                GameObject itemgo = self.SkillSetIconList[i];
+                GameObject addImage = itemgo.transform.parent.GetChild(0).gameObject;
+                SkillPro skillPro = skillSetComponent.GetByPosition(i + 1);
+
+                if (skillPro == null)
+                {
+                    addImage.GetComponent<Image>().fillAmount = 1;  
+                    itemgo.SetActive(false);
+                    continue;
+                }
+                addImage.GetComponent<Image>().fillAmount = 0;
+                itemgo.SetActive(true);
+                if (skillPro.SkillSetType == (int)SkillSetEnum.Skill)
+                {
+                    BagComponent bagComponent = self.ZoneScene().GetComponent<BagComponent>();
+                    SkillConfig skillConfig = SkillConfigCategory.Instance.Get(
+                        SkillHelp.GetWeaponSkill(skillPro.SkillID, UnitHelper.GetEquipType(self.ZoneScene()), skillSetComponent.SkillList)
+                       );
+                    string path =ABPathHelper.GetAtlasPath_2(ABAtlasTypes.RoleSkillIcon, skillConfig.SkillIcon);
+                    Sprite sp = ResourcesComponent.Instance.LoadAsset<Sprite>(path);
+                    if (!self.AssetPath.Contains(path))
+                    {
+                        self.AssetPath.Add(path);
+                    }
+                    itemgo.transform.Find("Img_Mask/Img_SkillIcon").GetComponent<Image>().sprite = sp;
+                }
+                if (skillPro.SkillSetType == (int)SkillSetEnum.Item)
+                {
+                    ItemConfig itemConfig = ItemConfigCategory.Instance.Get(skillPro.SkillID);
+                    string path =ABPathHelper.GetAtlasPath_2(ABAtlasTypes.ItemIcon, itemConfig.Icon);
+                    Sprite sp = ResourcesComponent.Instance.LoadAsset<Sprite>(path);
+                    if (!self.AssetPath.Contains(path))
+                    {
+                        self.AssetPath.Add(path);
+                    }
+                    itemgo.transform.Find("Img_Mask/Img_SkillIcon").GetComponent<Image>().sprite = sp;
+                }
+            }
+        }
+
+        public static void  UpdateSkillListUI(this UISkillSetComponent self)
+        {
+            List<SkillPro> skillPros = self.ZoneScene().GetComponent<SkillSetComponent>().SkillList;
+
+            int learnNumber = 0;
+            for (int i = 0; i < skillPros.Count; i++)
+            {
+                UISkillSetItemComponent uI = null;
+                if (skillPros[i].SkillSetType == (int)SkillSetEnum.Item)
+                {
+                    continue;
+                }
+                //没激活的不显示
+                SkillConfig skillConfig = SkillConfigCategory.Instance.Get(skillPros[i].SkillID);
+                if (skillConfig.SkillLv == 0 || skillConfig.IsShow == 1)
+                {
+                    continue;
+                }
+                if (skillConfig.SkillType == (int)SkillTypeEnum.PassiveSkill
+                    || skillConfig.SkillType == (int)SkillTypeEnum.PassiveAddProSkill
+                    || skillConfig.SkillType == (int)SkillTypeEnum.PassiveAddProSkillNoFight)
+                {
+                    continue;
+                }
+
+                if (learnNumber < self.SkillUIList.Count)
+                {
+                    uI = self.SkillUIList[learnNumber];
+                    uI.GameObject.SetActive(true);
+                }
+                else
+                {
+                    GameObject skillItem = GameObject.Instantiate(self.UISkillSetItem);
+                    skillItem.SetActive(true);
+                    UICommonHelper.SetParent(skillItem, self.SkillListNode);
+                    uI = self.AddChild<UISkillSetItemComponent, GameObject>(skillItem);
+                    self.SkillUIList.Add(uI);
+                }
+                learnNumber++;
+                uI.OnUpdateUI(skillPros[i]);
+            }
+            for (int i = learnNumber; i < self.SkillUIList.Count; i++ )
+            {
+                self.SkillUIList[i].GameObject.SetActive(false);
+            }
+        }
+
+        public static async ETTask UpdateItemSkillUI(this UISkillSetComponent self)
+        {
+            long instanceid = self.InstanceId;
+            var path = ABPathHelper.GetUGUIPath("Main/Role/UIItem");
+            GameObject bundleObj = await ResourcesComponent.Instance.LoadAssetAsync<GameObject>(path);
+            if (instanceid != self.InstanceId)
+            {
+                return;
+            }
+
+            List<BagInfo> bagInfos = self.ZoneScene().GetComponent<BagComponent>().GetBagList();
+            for (int i = 0; i < bagInfos.Count; i++)
+            {
+                int itemID = bagInfos[i].ItemID;
+                ItemConfig itemconf = ItemConfigCategory.Instance.Get(itemID);
+
+                if (itemconf.ItemType == (int)ItemTypeEnum.Consume && (itemconf.ItemSubType == 101 || itemconf.ItemSubType == 110) &&
+                    itemconf.ItemUsePar != "0" && itemconf.ItemUsePar != "")
+                {
+                    GameObject skillItem = GameObject.Instantiate(bundleObj);
+                    UICommonHelper.SetParent(skillItem, self.ItemListNode);
+
+                    UIItemComponent uIItemComponent = self.AddChild<UIItemComponent, GameObject>(skillItem);
+                    uIItemComponent.UpdateItem(bagInfos[i], ItemOperateEnum.SkillSet);
+                    uIItemComponent.SetEventTrigger(true);
+                    uIItemComponent.BeginDragHandler = (BagInfo binfo, PointerEventData pdata) => { self.BeginDrag(binfo, pdata); };
+                    uIItemComponent.DragingHandler = (BagInfo binfo, PointerEventData pdata) => { self.Draging(binfo, pdata); };
+                    uIItemComponent.EndDragHandler = (BagInfo binfo, PointerEventData pdata) => { self.EndDrag(binfo, pdata); };
+                    self.ItemUIList.Add(uIItemComponent);
+                }
+            }
+        }
+
+        public static void BeginDrag(this UISkillSetComponent self, BagInfo binfo, PointerEventData pdata)
+        {
+            self.SkillIconItemCopy = GameObject.Instantiate(self.SkillIconItem);
+            self.SkillIconItemCopy.SetActive(true);
+            UICommonHelper.SetParent(self.SkillIconItemCopy, UIEventComponent.Instance.UILayers[(int)UILayer.Low].gameObject);
+
+            ItemConfig itemconfig = ItemConfigCategory.Instance.Get(binfo.ItemID);
+            string path =ABPathHelper.GetAtlasPath_2(ABAtlasTypes.ItemIcon, itemconfig.Icon);
+            Sprite sp = ResourcesComponent.Instance.LoadAsset<Sprite>(path);
+            if (!self.AssetPath.Contains(path))
+            {
+                self.AssetPath.Add(path);
+            }
+            self.SkillIconItemCopy.transform.Find("Img_Mask/Img_SkillIcon").GetComponent<Image>().sprite = sp;
+        }
+
+        public static void Draging(this UISkillSetComponent self, BagInfo binfo, PointerEventData pdata)
+        {
+            RectTransform canvas = self.SkillIconItemCopy.transform.parent.GetComponent<RectTransform>();
+            Camera uiCamera = self.DomainScene().GetComponent<UIComponent>().UICamera;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvas, pdata.position, uiCamera, out self.localPoint);
+
+            self.SkillIconItemCopy.transform.localPosition = new Vector3(self.localPoint.x, self.localPoint.y, 0f);
+        }
+
+        public static void EndDrag(this UISkillSetComponent self, BagInfo binfo, PointerEventData pdata)
+        {
+            RectTransform canvas = self.SkillIconItemCopy.transform.parent.GetComponent<RectTransform>();
+            GraphicRaycaster gr = canvas.GetComponent<GraphicRaycaster>();
+            List<RaycastResult> results = new List<RaycastResult>();
+            gr.Raycast(pdata, results);
+
+            SkillSetComponent skillSetComponent = self.ZoneScene().GetComponent<SkillSetComponent>();
+            for (int i = 0; i < results.Count; i++)
+            {
+                string name = results[i].gameObject.name;
+                if (!name.Contains("Danger_Skill_Icon_"))
+                {
+                    continue;
+                }
+                int index = int.Parse(name.Remove(0, 18));
+                if (index < 9)
+                {
+                    continue;
+                }
+                skillSetComponent.SetSkillIdByPosition(binfo.ItemID, (int)SkillSetEnum.Item, index).Coroutine();
+                break;
+            }
+
+            if (self.SkillIconItemCopy != null)
+            {
+                GameObject.Destroy(self.SkillIconItemCopy);
+                self.SkillIconItemCopy = null;
+            }
+        }
+
+        public static void UpdateSkillSetUI(this UISkillSetComponent self)
+        {
+
+        }
+    }
+
+
+}

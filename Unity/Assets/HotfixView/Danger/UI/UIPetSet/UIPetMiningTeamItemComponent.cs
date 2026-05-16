@@ -1,0 +1,188 @@
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+namespace ET
+{
+
+    public class UIPetMiningTeamItemComponent : Entity, IAwake<GameObject>,IDestroy
+    {
+
+        public int TeamId = 0;   //0 1 2
+        public GameObject GameObject;
+
+        public GameObject TextTip11;
+        public GameObject TextTip12;
+
+        public PetComponent PetComponent;
+
+        public GameObject[] PetIcon_di_List = new GameObject[5];    
+        public UIPetFormationItemComponent[] FormationItemComponents = new UIPetFormationItemComponent[5];
+
+        public GameObject IconItemDrag;
+
+        public GameObject ButtonSet;
+        
+        public List<string> AssetPath = new List<string>();
+    }
+
+    public class UIPetMiningTeamItemComponentAwake : AwakeSystem<UIPetMiningTeamItemComponent, GameObject>
+    {
+        public override void Awake(UIPetMiningTeamItemComponent self, GameObject gameObject)
+        {
+            self.GameObject = gameObject;
+
+            self.TextTip11 = gameObject.transform.Find("TextTip11").gameObject;
+            self.TextTip12 = gameObject.transform.Find("TextTip12").gameObject;
+
+            for (int i = 0; i < self.FormationItemComponents.Length; i++)
+            {
+                self.PetIcon_di_List[i] = gameObject.transform.Find($"PetIcon_di_{i}").gameObject;
+                self.FormationItemComponents[i] = null;
+            }
+
+            self.PetComponent = self.ZoneScene().GetComponent<PetComponent>();
+
+            self.ButtonSet = gameObject.transform.Find("ButtonSet").gameObject;
+            self.ButtonSet.gameObject.SetActive( true );
+            self.ButtonSet.GetComponent<Button>().onClick.AddListener(() => { self.OnButtonSet().Coroutine();  } );
+        }
+    }
+    public class UIPetMiningTeamItemComponentDestroy : DestroySystem<UIPetMiningTeamItemComponent>
+    {
+        public override void Destroy(UIPetMiningTeamItemComponent self)
+        {
+            for(int i = 0; i < self.AssetPath.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(self.AssetPath[i]))
+                {
+                    ResourcesComponent.Instance.UnLoadAsset(self.AssetPath[i]); 
+                }
+            }
+            self.AssetPath = null;
+        }
+    }
+    public static class UIPetMiningTeamItemComponentSystem
+    {
+        public static async ETTask OnButtonSet(this UIPetMiningTeamItemComponent self)
+        {
+            long intanceid = self.InstanceId;
+            UI uI = await UIHelper.Create( self.ZoneScene(), UIType.UIPetMiningFormation );
+            if (intanceid != self.InstanceId)
+            {
+                return;
+            }
+            uI.GetComponent<UIPetMiningFormationComponent>().OnInitUI(SceneTypeEnum.PetMing, self.TeamId, null);
+        }
+
+        public static void OnInitUI(this UIPetMiningTeamItemComponent self,  int position)
+        { 
+            self.TeamId = position;
+            self.TextTip11.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("{0}队"), position + 1);
+
+            int playerLv = self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo.Lv;
+            int openLv = ConfigHelper.PetMiningTeamOpenLevel[position];
+            if (playerLv < openLv)
+            {
+                self.TextTip12.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("{0}级开启"), openLv);
+            }
+            else
+            {
+                self.TextTip12.SetActive(false);
+            }
+            for (int i = 0; i < self.PetIcon_di_List.Length; i++)
+            {
+                self.PetIcon_di_List[i].gameObject.SetActive(playerLv >= openLv);
+            }
+        }
+
+        public static void UpdatePetTeam(this UIPetMiningTeamItemComponent self, List<long> petlist)
+        {
+            var path = ABPathHelper.GetUGUIPath("Main/PetSet/UIPetFormationItem_2");
+            var bundleGameObject = ResourcesComponent.Instance.LoadAsset<GameObject>(path);
+
+            for (int i = 0; i < self.FormationItemComponents.Length; i++)
+            {
+                long petId = petlist[i + self.TeamId * 5];
+                RolePetInfo rolePetInfo = self.PetComponent.GetPetInfoByID(petId);
+              
+                if (rolePetInfo != null && self.FormationItemComponents[i] == null)
+                {
+                    GameObject goItem = GameObject.Instantiate(bundleGameObject);
+                    UICommonHelper.SetParent(goItem, self.PetIcon_di_List[i]);
+                    goItem.transform.localScale = Vector3.one * 0.6f;  
+                    UIPetFormationItemComponent FormationItem = self.AddChild<UIPetFormationItemComponent, GameObject>(goItem);
+                    self.FormationItemComponents[i] = FormationItem;
+                    FormationItem.BeginDragHandler = (RolePetInfo binfo, PointerEventData pdata) => { self.BeginDrag(binfo, pdata); };
+                    FormationItem.DragingHandler = (RolePetInfo binfo, PointerEventData pdata) => { self.Draging(binfo, pdata); };
+                    FormationItem.EndDragHandler = (RolePetInfo binfo, PointerEventData pdata) => { self.EndDrag(binfo, pdata); };
+                    FormationItem.SetDragEnable(true);
+                }
+                if (rolePetInfo == null && self.FormationItemComponents[i] != null)
+                {
+                    self.FormationItemComponents[i].GameObject.SetActive(false);    
+                }
+
+                if (rolePetInfo != null)
+                {
+                    self.FormationItemComponents[i].OnInitUI(rolePetInfo);
+                    self.FormationItemComponents[i].GameObject.SetActive(true);
+                }
+            }
+
+        }
+
+        public static void BeginDrag(this UIPetMiningTeamItemComponent self, RolePetInfo binfo, PointerEventData pdata)
+        {
+            self.IconItemDrag.SetActive(true);
+            PetConfig petConfig = PetConfigCategory.Instance.Get(binfo.ConfigId);
+            string path =ABPathHelper.GetAtlasPath_2(ABAtlasTypes.PetHeadIcon, petConfig.HeadIcon);
+            Sprite sp = ResourcesComponent.Instance.LoadAsset<Sprite>(path);
+            if (!self.AssetPath.Contains(path))
+            {
+                self.AssetPath.Add(path);
+            }
+            GameObject icon = self.IconItemDrag.transform.Find("ImageIcon").gameObject;
+            icon.GetComponent<Image>().sprite = sp;
+            UICommonHelper.SetParent(self.IconItemDrag, UIEventComponent.Instance.UILayers[(int)UILayer.Mid].gameObject);
+        }
+
+        public static void Draging(this UIPetMiningTeamItemComponent self, RolePetInfo binfo, PointerEventData pdata)
+        {
+            Vector2 localPoint;
+            RectTransform canvas = self.IconItemDrag.transform.parent.GetComponent<RectTransform>();
+            Camera uiCamera = self.DomainScene().GetComponent<UIComponent>().UICamera;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvas, pdata.position, uiCamera, out localPoint);
+
+            self.IconItemDrag.transform.localPosition = new Vector3(localPoint.x, localPoint.y, 0f);
+        }
+
+        public static void RequestFormationSet(this UIPetMiningTeamItemComponent self, long rolePetInfoId, int index, int operateType)
+        {
+            UI ui = UIHelper.GetUI(self.ZoneScene(), UIType.UIPetMiningTeam);
+            ui.GetComponent<UIPetMiningTeamComponent>().OnDragFormationSet(rolePetInfoId, index, operateType, self.TeamId);
+        }
+
+        public static void EndDrag(this UIPetMiningTeamItemComponent self, RolePetInfo binfo, PointerEventData pdata)
+        {
+            RectTransform canvas = self.IconItemDrag.transform.parent.GetComponent<RectTransform>();
+            GraphicRaycaster gr = canvas.GetComponent<GraphicRaycaster>();
+            List<RaycastResult> results = new List<RaycastResult>();
+            gr.Raycast(pdata, results);
+
+            for (int i = 0; i < results.Count; i++)
+            {
+                string name = results[i].gameObject.name;
+                if (name.Contains("UIPetFormationAA"))
+                {
+                    self.RequestFormationSet(binfo.Id, -1, 3);
+                    break;
+                }
+            }
+            UICommonHelper.SetParent(self.IconItemDrag, self.GameObject);
+            self.IconItemDrag.SetActive(false);
+        }
+    }
+
+}

@@ -1,0 +1,233 @@
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+
+    public class UIUnionAttributeUpComponent : Entity, IAwake, IDestroy
+    {
+
+        public GameObject ImageSelect;
+        public GameObject attributeItem_0;
+        public GameObject attributeItem_1;
+        public GameObject attributeItem_2;
+
+        public GameObject PropertyText;
+        public GameObject UICommonItem;
+        public GameObject CostItemListNode;
+        public GameObject UpBtn;
+
+        public List<UIItemComponent> UIItemComponentList = new List<UIItemComponent>();
+        public List<string> AssetPath = new List<string>();
+
+        public int SelectType;
+    }
+
+    public class UIUnionAttributeUpComponentAwake : AwakeSystem<UIUnionAttributeUpComponent>
+    {
+        public override void Awake(UIUnionAttributeUpComponent self)
+        {
+            ReferenceCollector rc = self.GetParent<UI>().GameObject.GetComponent<ReferenceCollector>();
+
+            self.ImageSelect = rc.Get<GameObject>("ImageSelect");
+
+            self.attributeItem_0 = rc.Get<GameObject>("attributeItem_0");
+            self.attributeItem_0.transform.Find("Button_IconItem0").GetComponent<Button>().onClick.AddListener(() => { self.OnClickAttributeItem(NumericType.UnionAttribute_1);  });
+
+
+            self.attributeItem_1 = rc.Get<GameObject>("attributeItem_1");
+            self.attributeItem_1.transform.Find("Button_IconItem0").GetComponent<Button>().onClick.AddListener(() => { self.OnClickAttributeItem(NumericType.UnionAttribute_2); });
+
+
+            self.attributeItem_2 = rc.Get<GameObject>("attributeItem_2");
+
+            self.PropertyText = rc.Get<GameObject>("PropertyText");
+            self.UICommonItem = rc.Get<GameObject>("UICommonItem");
+            self.CostItemListNode = rc.Get<GameObject>("CostItemListNode");
+            self.UpBtn = rc.Get<GameObject>("UpBtn");
+
+            self.UICommonItem.SetActive(false);
+
+            self.SelectType = NumericType.UnionAttribute_1;
+            self.UpBtn.GetComponent<Button>().onClick.AddListener(() => { self.OnUpBtn().Coroutine(); });
+
+            self.OnClickAttributeItem(NumericType.UnionAttribute_1);
+            
+            self.OnLanguageUpdate();
+            DataUpdateComponent.Instance.AddListener(DataType.LanguageUpdate, self);
+        }
+    }
+
+    public class UIUnionAttributeUpComponentDestroy : DestroySystem<UIUnionAttributeUpComponent>
+    {
+        public override void Destroy(UIUnionAttributeUpComponent self)
+        {
+            for (int i = 0; i < self.AssetPath.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(self.AssetPath[i]))
+                {
+                    ResourcesComponent.Instance.UnLoadAsset(self.AssetPath[i]);
+                }
+            }
+
+            self.AssetPath = null;
+            
+            DataUpdateComponent.Instance.RemoveListener(DataType.LanguageUpdate, self);
+        }
+    }
+
+
+    public static class UIUnionAttributeUpComponentSystem
+    {
+        public static void OnLanguageUpdate(this UIUnionAttributeUpComponent self)
+        {
+            self.attributeItem_0.transform.Find("NameLText").GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 40 : 30;
+            self.attributeItem_1.transform.Find("NameLText").GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 40 : 30;
+        }
+
+        public static void OnClickAttributeItem(this UIUnionAttributeUpComponent self, int numbeType)
+        {
+            self.SelectType = numbeType;
+
+            UICommonHelper.SetParent(self.ImageSelect, numbeType == NumericType.UnionAttribute_1?self.attributeItem_0: self.attributeItem_1);
+            self.ImageSelect.transform.SetAsFirstSibling();
+
+
+            self.UpdateInfo();
+        }
+
+        public static void UpdateRight(this UIUnionAttributeUpComponent self, GameObject gameitem, int numbeType)
+        {
+            self.UpdateAttributeItem(gameitem, numbeType);
+        
+            NumericComponent numericComponent = UnitHelper.GetMyUnitFromZoneScene(self.ZoneScene()).GetComponent<NumericComponent>();
+            PublicQiangHuaConfig publicQiangHuaConfig = PublicQiangHuaConfigCategory.Instance.Get(numericComponent.GetAsInt(numbeType));
+
+            if (publicQiangHuaConfig.QiangHuaLv != 0)
+            {
+                self.PropertyText.GetComponent<Text>().text = ItemViewHelp.GetAttributeDesc(publicQiangHuaConfig.EquipPropreAdd);
+            }
+            else
+            {
+                self.PropertyText.GetComponent<Text>().text = GameSettingLanguge.LoadLocalization("下一级:\n") +
+                        ItemViewHelp.GetAttributeDesc(PublicQiangHuaConfigCategory.Instance.Get(publicQiangHuaConfig.NextID).EquipPropreAdd);
+            }
+
+            BagComponent bagComponent = self.ZoneScene().GetComponent<BagComponent>();
+            string[] items1 = new[] { $"1;{publicQiangHuaConfig.CostGold}" };
+            string[] items2 = publicQiangHuaConfig.CostItem.Split('@');
+
+
+            string[] items = null;
+            if (publicQiangHuaConfig.CostGold == 0)
+            {
+                items = items2;
+            }
+            else
+            {
+                items = items1.Concat(items2).ToArray();
+            }
+
+
+            int num = 0;
+            foreach (string item in items)
+            {
+                string[] str = item.Split(';');
+                int itemConfigId = int.Parse(str[0]);
+                int itemNum = int.Parse(str[1]);
+                long havedNum = bagComponent.GetItemNumber(itemConfigId);
+                if (num >= self.UIItemComponentList.Count)
+                {
+                    GameObject go = UnityEngine.Object.Instantiate(self.UICommonItem);
+                    UIItemComponent uiItemComponent = self.AddChild<UIItemComponent, GameObject>(go);
+                    UICommonHelper.SetParent(go, self.CostItemListNode);
+                    go.SetActive(true);
+                    self.UIItemComponentList.Add(uiItemComponent);
+                }
+
+                UIItemComponent itemComponent = self.UIItemComponentList[num];
+                itemComponent.GameObject.SetActive(true);
+                itemComponent.UpdateItem(new BagInfo() { ItemID = itemConfigId }, ItemOperateEnum.None);
+                itemComponent.Label_ItemNum.GetComponent<Text>().text =
+                        itemConfigId == 1 ? string.Format(GameSettingLanguge.LoadLocalization("{0}万/{1}万"), (itemNum / 10000f).ToString("0.#"), (havedNum / 10000f).ToString("0.#")) : $"{itemNum}/{havedNum}";
+                itemComponent.Label_ItemNum.GetComponent<Text>().color =
+                        havedNum >= itemNum ? new Color(0, 1, 0) : new Color(245f / 255f, 43f / 255f, 96f / 255f);
+                num++;
+            }
+
+            for (int i = num; i < self.UIItemComponentList.Count; i++)
+            {
+                self.UIItemComponentList[i].GameObject.SetActive(false);
+            }
+        }
+
+        public static void UpdateAttributeItem(this UIUnionAttributeUpComponent self, GameObject gameitem,  int numbeType)
+        {
+            NumericComponent numericComponent = UnitHelper.GetMyUnitFromZoneScene(self.ZoneScene()).GetComponent<NumericComponent>();
+            PublicQiangHuaConfig publicQiangHuaConfig = PublicQiangHuaConfigCategory.Instance.Get(numericComponent.GetAsInt(numbeType));
+
+            string path = ABPathHelper.GetAtlasPath_2(ABAtlasTypes.OtherIcon, publicQiangHuaConfig.Icon);
+            Sprite sp = ResourcesComponent.Instance.LoadAsset<Sprite>(path);
+            if (!self.AssetPath.Contains(path))
+            {
+                self.AssetPath.Add(path);
+            }
+
+            gameitem.transform.Find("Button_IconItem0").GetComponent<Image>().sprite = sp;
+            gameitem.transform.Find("NameLText").GetComponent<Text>().text = publicQiangHuaConfig.GetEquipSpaceName();
+            UICommonHelper.SetImageGray(gameitem.transform.Find("Button_IconItem0").gameObject, publicQiangHuaConfig.QiangHuaLv == 0);
+        }
+
+        public static void UpdateInfo(this UIUnionAttributeUpComponent self)
+        {
+            self.UpdateAttributeItem(self.attributeItem_0, NumericType.UnionAttribute_1 );
+            self.UpdateAttributeItem(self.attributeItem_1, NumericType.UnionAttribute_2);
+
+            self.UpdateRight(self.attributeItem_2, self.SelectType);
+        }
+
+        public static async ETTask OnUpBtn(this UIUnionAttributeUpComponent self)
+        {
+            NumericComponent numericComponent = UnitHelper.GetMyUnitFromZoneScene(self.ZoneScene()).GetComponent<NumericComponent>();
+            PublicQiangHuaConfig publicQiangHuaConfig = PublicQiangHuaConfigCategory.Instance.Get(numericComponent.GetAsInt(self.SelectType));
+
+            if (publicQiangHuaConfig.NextID == 0)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("已经达到最高级"));
+                return;
+            }
+
+            if (self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo.Lv < publicQiangHuaConfig.UpLvLimit)
+            {
+                FloatTipManager.Instance.ShowFloatTip(string.Format(GameSettingLanguge.LoadLocalization("玩家等级不足，{0}开启"), publicQiangHuaConfig.UpLvLimit));
+                return;
+            }
+
+            BagComponent bagComponent = self.ZoneScene().GetComponent<BagComponent>();
+            if (!bagComponent.CheckNeedItem("1;" + publicQiangHuaConfig.CostGold + "@" + publicQiangHuaConfig.CostItem))
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("道具不足！"));
+                return;
+            }
+
+            C2M_BloodstoneQiangHuaRequest request = new C2M_BloodstoneQiangHuaRequest() { QiangHuaType = self.SelectType };
+            M2C_BloodstoneQiangHuaResponse response =
+                    (M2C_BloodstoneQiangHuaResponse)await self.ZoneScene().GetComponent<SessionComponent>().Session.Call(request);
+
+            if (response.Error != ErrorCode.ERR_Success)
+            {
+                return;
+            }
+
+            if (response.Level == publicQiangHuaConfig.Id)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("升级失败"));
+            }
+
+            self.UpdateInfo();
+        }
+    }
+}
+

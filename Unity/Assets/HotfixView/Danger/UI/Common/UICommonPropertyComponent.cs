@@ -1,0 +1,198 @@
+﻿using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+    public class UICommonPropertyComponent: Entity, IAwake, IDestroy
+    {
+        public GameObject NameText;
+        public GameObject LvText;
+        public GameObject ImageButton;
+        public GameObject ProItemSet;
+        public GameObject PropertyListSet;
+        public GameObject SkillListNode;
+
+        public List<ShowPropertyList> ShowPropertyList = new List<ShowPropertyList>();
+        public List<string> AssetPath = new List<string>();
+    }
+
+    public class UICommonPropertyComponentAwakeSystem: AwakeSystem<UICommonPropertyComponent>
+    {
+        public override void Awake(UICommonPropertyComponent self)
+        {
+            self.Awake();
+        }
+    }
+
+    public class UICommonPropertyComponentDestroy : DestroySystem<UICommonPropertyComponent>
+    {
+        public override void Destroy(UICommonPropertyComponent self)
+        {
+            for(int i = 0; i < self.AssetPath.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(self.AssetPath[i]))
+                {
+                    ResourcesComponent.Instance.UnLoadAsset(self.AssetPath[i]); 
+                }
+            }
+            self.AssetPath = null;
+        }
+    }
+    public static class UICommonPropertyComponentSytstem
+    {
+        public static void Awake(this UICommonPropertyComponent self)
+        {
+            ReferenceCollector rc = self.GetParent<UI>().GameObject.GetComponent<ReferenceCollector>();
+
+            self.NameText = rc.Get<GameObject>("NameText");
+            self.LvText = rc.Get<GameObject>("LvText");
+            self.ImageButton = rc.Get<GameObject>("ImageButton");
+            self.ProItemSet = rc.Get<GameObject>("ProItemSet");
+            self.PropertyListSet = rc.Get<GameObject>("PropertyListSet");
+            self.SkillListNode = rc.Get<GameObject>("SkillListNode");
+
+            self.PropertyListSet.SetActive(false);
+
+            self.ImageButton.GetComponent<Button>().onClick.AddListener(() => UIHelper.Remove(self.ZoneScene(), UIType.UICommonProperty));
+
+            self.InitShowPropertyList();
+        }
+
+        public static void ShowSkillList(this UICommonPropertyComponent self, Unit unit)
+        {
+            if (unit.Type != UnitType.Monster)
+            {
+                return;
+            }
+            List<int> skillids = new List<int>  ();
+
+            NumericComponent numericComponent = unit.GetComponent<NumericComponent>();
+            MonsterConfig monsterConfig = MonsterConfigCategory.Instance.Get(unit.ConfigId);
+
+            skillids.Add( monsterConfig.ActSkillID );
+            if (monsterConfig.SkillID != null)
+            {
+                for (int i = 0; i < monsterConfig.SkillID.Length; i++)
+                {
+                    skillids.Add(monsterConfig.SkillID[i]);
+                }
+            }
+
+            var path = ABPathHelper.GetUGUIPath("Main/Common/UICommonSkillItem");
+            var bundleGameObject = ResourcesComponent.Instance.LoadAsset<GameObject>(path);
+            for (int i = 0; i < skillids.Count; i++)
+            {
+                if (skillids[i] == 0)
+                {
+                    continue;
+                }
+                SkillConfig skillConfig = SkillConfigCategory.Instance.Get(skillids[i]);
+                if (ComHelp.IfNull(skillConfig.SkillIcon))
+                {
+                    return;
+                }
+
+                GameObject skillItem = GameObject.Instantiate(bundleGameObject);
+                UICommonHelper.SetParent(skillItem, self.SkillListNode);
+                skillItem.SetActive(true);
+                skillItem.transform.localScale = Vector3.one * 1f;
+
+                UICommonSkillItemComponent ui_item = self.AddChild<UICommonSkillItemComponent, GameObject>(skillItem);
+                ui_item.OnUpdateUI(skillids[i]);
+            }
+        }
+
+        public static async ETTask InitPropertyShow(this UICommonPropertyComponent self, Unit unit)
+        {
+            C2M_UnitInfoRequest request = new C2M_UnitInfoRequest() { UnitID = unit.Id };
+            M2C_UnitInfoResponse response = (M2C_UnitInfoResponse)await self.ZoneScene().GetComponent<SessionComponent>().Session.Call(request);
+            if (response.Error != ErrorCode.ERR_Success)
+            {
+                return;
+            }
+            if (self.IsDisposed)
+            {
+                return;
+            }
+
+            NumericComponent numericComponent = unit.GetComponent<NumericComponent>();
+            for (int i = 0; i < response.Ks.Count; ++i)
+            {
+                numericComponent.Set(response.Ks[i], response.Vs[i]);
+            }
+
+            self.ShowSkillList(unit);
+            self.NameText.GetComponent<Text>().text = MonsterConfigCategory.Instance.Get(unit.ConfigId).GetMonsterName();
+            self.LvText.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("当前等级：{0}"), numericComponent.GetAsInt(NumericType.Now_Lv).ToString());
+
+            for (int i = 0; i < self.ShowPropertyList.Count; i++)
+            {
+                GameObject go = UnityEngine.Object.Instantiate(self.PropertyListSet);
+                go.transform.SetParent(self.ProItemSet.transform);
+                go.transform.localScale = new Vector3(1, 1, 1);
+                go.transform.localPosition = new Vector3(0, 0, 0);
+                go.SetActive(true);
+
+                ShowPropertyList showList = self.ShowPropertyList[i];
+                ReferenceCollector rc = go.GetComponent<ReferenceCollector>();
+
+                rc.Get<GameObject>("Lab_PropertyType").GetComponent<Text>().text = showList.name;
+
+                if (self.ShowPropertyList[i].Type == 1)
+                {
+                    rc.Get<GameObject>("Lab_ProTypeValue").GetComponent<Text>().text = showList.numericType == NumericType.Now_Speed
+                            ? numericComponent.GetAsFloat(showList.numericType).ToString()
+                            : numericComponent.GetAsLong(showList.numericType).ToString();
+                    //显示图标
+                    if (!string.IsNullOrEmpty(showList.iconID))
+                    {
+                        string path =ABPathHelper.GetAtlasPath_2(ABAtlasTypes.PropertyIcon, showList.iconID);
+                        Sprite sp = ResourcesComponent.Instance.LoadAsset<Sprite>(path);
+                        if (!self.AssetPath.Contains(path))
+                        {
+                            self.AssetPath.Add(path);
+                        }
+                        rc.Get<GameObject>("Img_Icon").GetComponent<Image>().sprite = sp;
+                        rc.Get<GameObject>("Img_Icon").SetActive(true);
+                    }
+                }
+                else
+                {
+                    float value = numericComponent.GetAsFloat(showList.numericType) * 100.0f;
+                    if (value.ToString().Contains("."))
+                    {
+                        rc.Get<GameObject>("Lab_ProTypeValue").GetComponent<Text>().text = value.ToString("F2") + "%";
+                    }
+                    else
+                    {
+                        rc.Get<GameObject>("Lab_ProTypeValue").GetComponent<Text>().text = value.ToString() + "%";
+                    }
+                }
+            }
+        }
+
+        public static void InitShowPropertyList(this UICommonPropertyComponent self)
+        {
+            self.ShowPropertyList.Add(AddShowProperList(NumericType.Now_MaxHp, GameSettingLanguge.LoadLocalization("生命"), "Pro_4", 1));
+            self.ShowPropertyList.Add(AddShowProperList(NumericType.Now_MaxAct, GameSettingLanguge.LoadLocalization("攻击"), "Pro_5", 1));
+            self.ShowPropertyList.Add(AddShowProperList(NumericType.Now_MaxDef, GameSettingLanguge.LoadLocalization("防御"), "Pro_3", 1));
+            self.ShowPropertyList.Add(AddShowProperList(NumericType.Now_MaxAdf, GameSettingLanguge.LoadLocalization("魔御"), "Pro_9", 1));
+            self.ShowPropertyList.Add(AddShowProperList(NumericType.Now_Hit, GameSettingLanguge.LoadLocalization("命中概率"), "", 2));
+            self.ShowPropertyList.Add(AddShowProperList(NumericType.Now_Dodge, GameSettingLanguge.LoadLocalization("闪避概率"), "", 2));
+            self.ShowPropertyList.Add(AddShowProperList(NumericType.Now_Cri, GameSettingLanguge.LoadLocalization("暴击概率"), "", 2));
+            self.ShowPropertyList.Add(AddShowProperList(NumericType.Now_Res, GameSettingLanguge.LoadLocalization("韧性概率"), "", 2));
+            self.ShowPropertyList.Add(AddShowProperList(NumericType.Now_Speed, GameSettingLanguge.LoadLocalization("移动速度"), "", 2));
+        }
+
+        public static ShowPropertyList AddShowProperList(int numericType, string name, string iconID, int type)
+        {
+            ShowPropertyList showList = new ShowPropertyList();
+            showList.numericType = numericType;
+            showList.name = name;
+            showList.iconID = iconID;
+            showList.Type = type;
+            return showList;
+        }
+    }
+}

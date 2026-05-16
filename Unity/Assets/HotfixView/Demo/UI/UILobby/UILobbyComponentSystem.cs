@@ -1,0 +1,389 @@
+﻿using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace ET
+{
+    public class UILobbyComponent : Entity, IAwake
+    {
+        public GameObject ImageDi;
+        public GameObject Text_Lv;
+        public GameObject Text_Name;
+        public GameObject ObjRoleList;
+        public GameObject ObjRoleListSet;
+        public GameObject ObjBtnEnterGame;
+        public GameObject ObjBtnCreateRole;
+        public GameObject ObjBtnDeleteRole;
+        public GameObject ObjBtnReturnRole;
+        public GameObject ObjBtnRandomName;
+        public GameObject Button_Return;
+
+        public GameObject RawImage;
+        public UIModelShowComponent uIModelShowComponent;
+        public GameObject ObjInputCreateRoleName;
+        public GameObject ObjCreateRoleShow;
+
+        public int PageIndex = 0;
+        public int PageCount = 4;
+        public GameObject Button_2;
+        public GameObject Button_1;
+        public CreateRoleInfo SeletRoleInfo;              
+        public List<UICreateRoleListComponent> CreateRoleListUI = new List<UICreateRoleListComponent>();
+        public ETCancellationToken eTCancellation = null;
+        public AccountInfoComponent PlayerComponent;
+
+        public float LastLoginTime;
+    }
+    public class UILobbyComponentAwakeSystem : AwakeSystem<UILobbyComponent>
+    {
+        public override void Awake(UILobbyComponent self)
+        {
+            self.CreateRoleListUI.Clear();
+            ReferenceCollector rc = self.GetParent<UI>().GameObject.GetComponent<ReferenceCollector>();
+
+            self.RawImage = rc.Get<GameObject>("RawImage");
+            self.ImageDi = rc.Get<GameObject>("ImageDi");
+            self.ImageDi.SetActive(false);
+            self.Text_Lv = rc.Get<GameObject>("Text_Lv");
+            self.Text_Name = rc.Get<GameObject>("Text_Name");
+            self.ObjRoleList = rc.Get<GameObject>("RoleList");
+            self.ObjRoleList.SetActive(false);
+            self.ObjRoleListSet = rc.Get<GameObject>("RoleListSet");
+            self.Button_1 = rc.Get<GameObject>("Button_1");
+            self.Button_2 = rc.Get<GameObject>("Button_2");
+            ButtonHelp.AddListenerEx(self.Button_1, self.OnButton_1);
+            ButtonHelp.AddListenerEx(self.Button_2, self.OnButton_2);
+
+            self.Button_Return = rc.Get<GameObject>("Button_Return");
+            ButtonHelp.AddListenerEx(self.Button_Return, self.OnButton_Return);
+
+
+            //ios适配
+            IPHoneHelper.SetPosition(self.ObjRoleListSet, new Vector2(350f, 400f));
+
+            self.ObjBtnEnterGame = rc.Get<GameObject>("BtnEnterGame");
+
+            self.ObjBtnDeleteRole = rc.Get<GameObject>("BtnDeleteRole");
+         
+            self.ObjCreateRoleShow = rc.Get<GameObject>("CreateRoleShow");
+            self.ObjBtnReturnRole = rc.Get<GameObject>("BtnReturnRole");
+
+            self.ObjInputCreateRoleName = rc.Get<GameObject>("InputCreateRoleName");
+            self.ObjBtnRandomName = rc.Get<GameObject>("BtnRandomName");
+
+            ButtonHelp.AddListenerEx(self.ObjBtnEnterGame, () => self.EnterGame().Coroutine());
+            ButtonHelp.AddListenerEx(self.ObjBtnDeleteRole, () => self.DeleteRole());
+            self.PlayerComponent = self.DomainScene().GetComponent<AccountInfoComponent>();
+
+            self.PageIndex = 0;
+            self.SeletRoleInfo = null;
+            string lastUserID = PlayerPrefsHelp.GetString(PlayerPrefsHelp.LastUserID);
+            if (!string.IsNullOrEmpty(lastUserID))
+            {
+                long useid = long.Parse(lastUserID);
+                for (int i = 0; i < self.PlayerComponent.CreateRoleList.Count; i++)
+                {
+                    if (self.PlayerComponent.CreateRoleList[i].UserID == useid)
+                    {
+                        self.SeletRoleInfo = self.PlayerComponent.CreateRoleList[i];
+                        self.PageIndex = i / self.PageCount;
+                        break;
+                    }
+                }
+            }
+
+
+            //展示角色列表
+            if (UIHelper.GetUI(self.ZoneScene(),  UIType.UILobby)== null)
+            {
+                self.UpdateRoleList();
+            }
+
+        }
+    }
+
+    //[ObjectSystem]
+    public static class UILobbyComponentSystem
+    {
+        public static void InitModelShowView(this UILobbyComponent self)
+        {
+            //模型展示界面
+            var path = ABPathHelper.GetUGUIPath("Common/UIModelShow1");
+            GameObject bundleGameObject =  ResourcesComponent.Instance.LoadAsset<GameObject>(path);
+            GameObject gameObject = UnityEngine.Object.Instantiate(bundleGameObject);
+            UICommonHelper.SetParent(gameObject, self.RawImage);
+            gameObject.transform.localPosition = new Vector3(0, 0, 0);
+            gameObject.transform.Find("Camera").localPosition = new Vector3(0f, 70f, 150f);
+            gameObject.transform.Find("Camera").GetComponent<Camera>().fieldOfView = 80;
+
+
+            UI ui = self.AddChild<UI, string, GameObject>( "UIModelShow", gameObject);
+            self.uIModelShowComponent = ui.AddComponent<UIModelShowComponent, GameObject>(self.RawImage);
+            self.RawImage.SetActive(true);
+        }
+
+        public static void OnCreateRoleData(this UILobbyComponent self, CreateRoleInfo roleinfo, int page)
+        {
+            self.PageIndex = page;
+            self.SeletRoleInfo = roleinfo;
+
+            self.UpdateRoleList();
+        }
+
+        public static void Update_Page(this UILobbyComponent self)
+        {
+            int roleNumber = self.PlayerComponent.CreateRoleList.Count;
+            roleNumber = Mathf.Max(roleNumber, 8);
+
+            int pagetotal = roleNumber / 4;
+            pagetotal += ((roleNumber % 4 > 0) ? 1 : 0);
+
+            self.Button_1.SetActive( self.PageIndex > 0 );
+            self.Button_2.SetActive( self.PageIndex < pagetotal - 1);
+        }
+
+        public static void OnButton_Return(this UILobbyComponent self)
+        {
+            PopupTipHelp.OpenPopupTip(self.ZoneScene(), GameSettingLanguge.LoadLocalization("系统提示"), GameSettingLanguge.LoadLocalization("请问是否返回主界面?"), ()=>
+            {  //加载登录场景
+                EventType.ReturnLogin.Instance.ZoneScene = self.ZoneScene();
+                EventType.ReturnLogin.Instance.ErrorCode = 0;
+                Game.EventSystem.PublishClass(EventType.ReturnLogin.Instance);
+            }, null).Coroutine();
+           
+        }
+
+        public static void OnButton_2(this UILobbyComponent self)
+        {
+            int roleNumber = self.PlayerComponent.CreateRoleList.Count;
+            roleNumber = Mathf.Max(roleNumber, 8);
+
+            int pagetotal = roleNumber / 4;
+            pagetotal += ( (roleNumber % 4 > 0) ? 1 : 0 );
+            if (self.PageIndex >= pagetotal -1)
+            {
+                return;
+            }
+            self.PageIndex++;
+ 
+            self.UpdateRoleList();
+        }
+
+        public static void OnButton_1(this UILobbyComponent self)
+        {
+            if (self.PageIndex < 1)
+            {
+                return;
+            }
+            self.PageIndex--;
+ 
+            self.UpdateRoleList();
+        }
+
+        //展示角色列表
+        public static void UpdateRoleList(this UILobbyComponent self)
+        {
+            if (self.SeletRoleInfo == null)
+            {
+                if (self.PlayerComponent.CreateRoleList.Count > 0)
+                {
+                    self.SeletRoleInfo = self.PlayerComponent.CreateRoleList[0];
+                }
+                self.PageIndex = 0;
+            }
+            int pageIndex = self.PageIndex;
+            int starIndex = pageIndex * self.PageCount; 
+
+            //int num = self.PlayerComponent.CreateRoleList.Count +1;
+            int num = self.PlayerComponent.CreateRoleList.Count - starIndex + 1;
+            num = Mathf.Min(4, num);
+            //显示列表
+            for (int i = 0; i < num; i++)
+            {
+                UICreateRoleListComponent ui_1;
+                if (i < self.CreateRoleListUI.Count)
+                {
+                    ui_1 = self.CreateRoleListUI[i];
+                }
+                else
+                {
+                    GameObject go = GameObject.Instantiate(self.ObjRoleList);
+                    UICommonHelper.SetParent(go, self.ObjRoleListSet);
+                    ui_1 = self.AddChild<UICreateRoleListComponent, GameObject>( go);
+                    go.SetActive(true);
+
+                    //添加记录
+                    self.CreateRoleListUI.Add(ui_1);
+                }
+
+                CreateRoleInfo CreateRoleList = null;
+                if (i < self.PlayerComponent.CreateRoleList.Count - starIndex)
+                {
+                    CreateRoleList = self.PlayerComponent.CreateRoleList[starIndex + i];
+                }
+                ui_1.ShowRoleList(CreateRoleList);
+            }
+            if (num >= 0)
+            {
+                for (int i = num; i < self.CreateRoleListUI.Count; i++)
+                {
+                    self.CreateRoleListUI[i].ShowRoleList(null);
+                }
+            }
+           
+
+            self.UpdateSelectShow().Coroutine();
+            self.Update_Page();
+
+        }
+
+        //更新当前选中显示
+        public static async ETTask UpdateSelectShow(this UILobbyComponent self)
+        {
+            for (int i = 0; i < self.CreateRoleListUI.Count; i++)
+            {
+                self.CreateRoleListUI[i].UpdateSelectStatus(self.SeletRoleInfo);
+            }
+            if (self.SeletRoleInfo != null)
+            {
+                self.Text_Name.GetComponent<Text>().text = self.SeletRoleInfo.PlayerName;
+                self.Text_Lv.GetComponent<Text>().text = string.Format(GameSettingLanguge.LoadLocalization("{0}级"), self.SeletRoleInfo.PlayerLv);
+                self.eTCancellation?.Cancel();
+                self.eTCancellation = new ETCancellationToken();
+                if (self.uIModelShowComponent == null)
+                {
+                    self.InitModelShowView();
+                }
+                self.uIModelShowComponent.ShowPlayerModel(new BagInfo() { ItemID = self.SeletRoleInfo.WeaponId }, self.SeletRoleInfo.PlayerOcc, self.SeletRoleInfo.EquipIndex, self.SeletRoleInfo.FashionIds);
+                long instanceid = self.InstanceId;
+                await TimerComponent.Instance.WaitAsync(100);
+                if (self.InstanceId != instanceid)
+                    return;
+                self.RawImage.SetActive(true);
+            }
+            else
+            {
+                self.RawImage.SetActive(false);
+            }
+            self.ObjRoleListSet.SetActive(false);
+            self.ObjRoleListSet.SetActive(true);
+
+            self.ShowSelectEff().Coroutine();
+
+            await ETTask.CompletedTask;
+        }
+
+        //选择角色进入游戏
+        public static async ETTask EnterGame(this UILobbyComponent self)
+        {
+            if (Time.time - self.LastLoginTime < 4f)
+            {
+                return;
+            }
+            if (self.PlayerComponent.CreateRoleList.Count == 0)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("请先创建角色!"));
+                return;
+            }
+            if (self.SeletRoleInfo == null)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("进入角色为空!"));
+                return;
+            }
+
+            Session session = self.ZoneScene().GetComponent<SessionComponent>().Session;
+            if (session == null || session.IsDisposed)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("已掉线，请重新连接!"));
+                return;
+            }
+
+            self.LastLoginTime = Time.time;
+            PlayerPrefsHelp.SetString(PlayerPrefsHelp.LastUserID, self.SeletRoleInfo.UserID.ToString());
+            self.PlayerComponent.CurrentRoleId = self.SeletRoleInfo.UserID;
+            int loginErroCode = await LoginHelper.GetRealmKey(self.ZoneScene());
+            if (loginErroCode != ErrorCode.ERR_Success)
+            {
+                Log.Error(loginErroCode.ToString());
+                return;
+            }
+
+#if TikTok5
+            string deviveInfo = $"tiktok";
+#else
+            string deviveInfo = $"{UnityEngine.SystemInfo.deviceModel}_{UnityEngine.Screen.width}:{UnityEngine.Screen.height}";
+#endif
+            await  LoginHelper.EnterGame(self.ZoneScene(), deviveInfo, false, GlobalHelp.GetPlatform());
+        }
+
+        //删除角色
+        public static void  DeleteRole(this UILobbyComponent self)
+        {
+            //Log.Info("删除角色..");
+            //判断当前选中栏是否有角色
+            if (self.SeletRoleInfo == null)
+            {
+                return;
+            }
+            if (self.SeletRoleInfo == null)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("删除列表种没有角色!"));
+                return;
+            }
+            PopupTipHelp.OpenPopupTip
+                (
+                    self.ZoneScene(),
+                    GameSettingLanguge.LoadLocalization("删除角色"),
+                    GameSettingLanguge.LoadLocalization("是否删除当前角色？"),
+                    () => 
+                    {
+                        self.RequestDeleteRole().Coroutine();
+                    }
+                )
+                .Coroutine();
+
+           
+        }
+
+        public static async ETTask RequestDeleteRole(this UILobbyComponent self)
+        {
+            //发送删除
+            A2C_DeleteRoleData g2cCreateRole = (A2C_DeleteRoleData)await self.DomainScene().GetComponent<SessionComponent>().Session.Call(new C2A_DeleteRoleData()
+            {
+                DeleUserID = self.SeletRoleInfo.UserID,
+                AccountId = self.PlayerComponent.AccountId
+            });
+
+            //删除成功刷新当前角色列表
+
+            self.PlayerComponent.CreateRoleList.Remove(self.SeletRoleInfo);
+            self.SeletRoleInfo = null;
+            self.UpdateRoleList();
+        }
+
+        public static async ETTask ShowSelectEff(this UILobbyComponent self)
+        {
+            GameObject child = GameObject.Find("Effect_CreateSelect");
+            if (child == null)
+            {
+                return;
+            }
+
+            for (int c = 0; c < child.transform.childCount; c++)
+            {
+                child.transform.GetChild(c).gameObject.SetActive(true);
+            }
+            long instanceid = self.InstanceId;
+            await TimerComponent.Instance.WaitAsync(500);
+            if (instanceid != self.InstanceId)
+            {
+                return;
+            }
+            for (int c = 0; c < child.transform.childCount; c++)
+            {
+                child.transform.GetChild(c).gameObject.SetActive(false);
+            }
+        }
+    }
+}

@@ -1,0 +1,3 @@
+cd /d ../Bin
+
+pause

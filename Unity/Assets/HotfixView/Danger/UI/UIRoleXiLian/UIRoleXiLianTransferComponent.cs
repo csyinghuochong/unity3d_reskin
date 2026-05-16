@@ -1,0 +1,381 @@
+﻿using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+namespace ET
+{
+    public class UIRoleXiLianTransferComponent : Entity, IAwake,IDestroy
+    {
+        public GameObject Text_Tip_1;
+        public GameObject Text_Tip_2;
+        public GameObject Text_Tip_3;
+        public GameObject Text_Tip_4;
+        public GameObject ButtonTransfer;
+        public GameObject UICommonCostItem;
+        public GameObject UICommonItem_2;
+        public GameObject UICommonItem_1;
+        public GameObject UICommonItem_Copy;
+        public GameObject ItemListNode;
+
+        public BagInfo[] BagInfo_Transfer;
+        public UIItemComponent[] UIItem_Transfer;
+        public UICommonCostItemComponent UICommonCostItem_1;
+
+        public List<UIItemComponent> UIEquipList = new List<UIItemComponent>();
+        public Vector2 localPoint;
+        public bool IsHoldDown;
+        public List<string> AssetPath = new List<string>();
+        
+        public List<Vector2> UIOldPositionList = new List<Vector2>();
+    }
+
+
+    public class UIRoleXiLianTransferComponentAwakeSystem : AwakeSystem<UIRoleXiLianTransferComponent>
+    {
+        public override void Awake(UIRoleXiLianTransferComponent self)
+        {
+            ReferenceCollector rc = self.GetParent<UI>().GameObject.GetComponent<ReferenceCollector>();
+            self.IsHoldDown = false;
+            self.BagInfo_Transfer = new BagInfo[2];
+            self.UIItem_Transfer = new UIItemComponent[2];
+            self.ButtonTransfer = rc.Get<GameObject>("ButtonTransfer");
+            ButtonHelp.AddListenerEx( self.ButtonTransfer, () => { self.OnButtonTransfer().Coroutine(); } );
+
+            self.Text_Tip_1 = rc.Get<GameObject>("Text_Tip_1");
+            self.Text_Tip_2 = rc.Get<GameObject>("Text_Tip_2");
+            self.Text_Tip_3 = rc.Get<GameObject>("Text_Tip_3");
+            self.Text_Tip_4 = rc.Get<GameObject>("Text_Tip_4");
+            self.UICommonCostItem = rc.Get<GameObject>("UICommonCostItem");
+            self.UICommonItem_2 = rc.Get<GameObject>("UICommonItem_2");
+            self.UICommonItem_1 = rc.Get<GameObject>("UICommonItem_1");
+            self.ItemListNode = rc.Get<GameObject>("ItemListNode");
+
+            self.OnInitUI();
+
+            self.GetParent<UI>().OnUpdateUI = self.OnUpdateUI;
+            
+            self.StoreUIdData();
+            self.OnLanguageUpdate();
+            DataUpdateComponent.Instance.AddListener(DataType.LanguageUpdate, self);
+        }
+    }
+    public class UIRoleXiLianTransferComponentDestroy: DestroySystem<UIRoleXiLianTransferComponent>
+    {
+        public override void Destroy(UIRoleXiLianTransferComponent self)
+        {
+            for (int i = 0; i < self.AssetPath.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(self.AssetPath[i]))
+                {
+                    ResourcesComponent.Instance.UnLoadAsset(self.AssetPath[i]);
+                }
+            }
+
+            self.AssetPath = null;
+            
+            DataUpdateComponent.Instance.RemoveListener(DataType.LanguageUpdate, self);
+        }
+    }
+    public static class UIRoleXiLianTransferComponentSystem
+    {
+        public static void StoreUIdData(this UIRoleXiLianTransferComponent self)
+        {
+            self.UIOldPositionList.Add(self.Text_Tip_1.GetComponent<RectTransform>().localPosition);
+            self.UIOldPositionList.Add(self.Text_Tip_2.GetComponent<RectTransform>().localPosition);
+            self.UIOldPositionList.Add(self.Text_Tip_3.GetComponent<RectTransform>().localPosition);
+            self.UIOldPositionList.Add(self.Text_Tip_4.GetComponent<RectTransform>().localPosition);
+        }
+
+        public static void OnLanguageUpdate(this UIRoleXiLianTransferComponent self)
+        {
+            self.Text_Tip_1.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 30 : 26;
+            self.Text_Tip_2.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 30 : 26;
+            self.Text_Tip_3.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 30 : 26;
+            self.Text_Tip_4.GetComponent<Text>().fontSize = GameSettingLanguge.Language == 0? 30 : 26;
+            
+            self.Text_Tip_1.GetComponent<RectTransform>().localPosition = GameSettingLanguge.Language == 0? self.UIOldPositionList[0]: new Vector2(579, 41);
+            self.Text_Tip_2.GetComponent<RectTransform>().localPosition = GameSettingLanguge.Language == 0? self.UIOldPositionList[1]: new Vector2(579, 3);
+            self.Text_Tip_3.GetComponent<RectTransform>().localPosition = GameSettingLanguge.Language == 0? self.UIOldPositionList[2]: new Vector2(579, -63);
+            self.Text_Tip_4.GetComponent<RectTransform>().localPosition = GameSettingLanguge.Language == 0? self.UIOldPositionList[3]: new Vector2(579, -131);
+        }
+
+        public static async ETTask OnButtonTransfer(this UIRoleXiLianTransferComponent self)
+        {
+            string costItem = GlobalValueConfigCategory.Instance.Get(51).Value;
+            if (!self.ZoneScene().GetComponent<BagComponent>().CheckNeedItem(costItem))
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("材料不足！"));
+                return;
+            }
+
+            if (self.BagInfo_Transfer[0] == null || self.BagInfo_Transfer[1] == null)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("请选择合适的装备转移！"));
+                return;
+            }
+
+            //圣光装备洗练继承功能 布甲只能继承布甲 同类型只能继承同类型
+            ItemConfig itemConfig_0 = ItemConfigCategory.Instance.Get(self.BagInfo_Transfer[0].ItemID);
+            ItemConfig itemConfig_1 = ItemConfigCategory.Instance.Get(self.BagInfo_Transfer[1].ItemID);
+
+            bool all60green = itemConfig_0.UseLv >= 60 && itemConfig_0.ItemQuality >= 5 && itemConfig_1.UseLv >= 60 && itemConfig_1.ItemQuality >= 5;
+
+
+            if (!all60green) 
+            {
+                //相同部位
+                if (itemConfig_0.EquipType != itemConfig_1.EquipType)
+                {
+                    FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("只有护甲类型相同的装备才能转移！"));
+                    return;
+                }
+            }
+
+            if(!all60green)
+            {
+                //相同部位
+                if (itemConfig_0.ItemSubType != itemConfig_1.ItemSubType)
+                {
+                    FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("只有相同部位的装备才能转移！"));
+                    return;
+                }
+            }
+
+            //紫色品质以上才可以转移
+            if (itemConfig_0.ItemQuality < 4 || itemConfig_1.ItemQuality < 4)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("只有紫色及以上品质的装备才能转移！"));
+                return;
+            }
+
+            if (itemConfig_0.EquipType > 100 ||  itemConfig_1.EquipType > 100)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("该装备不能转移！"));
+                return;
+            }
+
+
+            //绑定装备无法转移
+            if (self.BagInfo_Transfer[0].isBinging == true && self.BagInfo_Transfer[1].isBinging == false && itemConfig_1.ItemQuality == 4)
+            {
+                FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("绑定装备的洗炼属性无法转移至未绑定的装备！"));
+                return;
+            }
+
+            C2M_ItemXiLianTransferRequest request = new C2M_ItemXiLianTransferRequest()
+            {
+                OperateBagID_1 = self.BagInfo_Transfer[0].BagInfoID,
+                OperateBagID_2 = self.BagInfo_Transfer[1].BagInfoID
+            };
+            M2C_ItemXiLianTransferResponse response = (M2C_ItemXiLianTransferResponse)await self.ZoneScene().GetComponent<SessionComponent>().Session.Call(request);
+            if (response.Error != ErrorCode.ERR_Success)
+            {
+                return;
+            }
+            FloatTipManager.Instance.ShowFloatTip(GameSettingLanguge.LoadLocalization("装备属性转移成功！"));
+            self.OnUpdateUI();
+        }
+
+        public static void OnInitUI(this UIRoleXiLianTransferComponent self)
+        {
+            self.UICommonCostItem_1 = self.AddChild<UICommonCostItemComponent, GameObject>(self.UICommonCostItem);
+            self.UpdateCost();
+
+            self.UIItem_Transfer[0] = self.AddChild<UIItemComponent, GameObject>(self.UICommonItem_1);
+            self.UIItem_Transfer[1] = self.AddChild<UIItemComponent, GameObject>(self.UICommonItem_2);
+            self.UIItem_Transfer[0].GameObject.SetActive(false);
+            self.UIItem_Transfer[1].GameObject.SetActive(false);
+        }
+
+        public static void OnUpdateUI(this UIRoleXiLianTransferComponent self)
+        {
+            self.UpdateCost();
+            self.ResetSelect();
+            self.UpdateSelected();
+            self.UpdateEquipItemUI().Coroutine();
+        }
+
+        public static void UpdateCost(this UIRoleXiLianTransferComponent self)
+        {
+            string[] costItem = GlobalValueConfigCategory.Instance.Get(51).Value.Split(';');
+            self.UICommonCostItem_1.UpdateItem(int.Parse(costItem[0]), int.Parse(costItem[1]));
+        }
+
+        public static void ResetSelect(this UIRoleXiLianTransferComponent self)
+        {
+            self.BagInfo_Transfer[0] = null;
+            self.BagInfo_Transfer[1] = null;
+            self.UIItem_Transfer[0].GameObject.SetActive(false);
+            self.UIItem_Transfer[1].GameObject.SetActive(false);
+        }
+
+        public static void UpdateSelect(this UIRoleXiLianTransferComponent self)
+        {
+            BagComponent bagComponent = self.ZoneScene().GetComponent<BagComponent>();
+            BagInfo bagInfo_1 = bagComponent.GetBagInfo(self.BagInfo_Transfer[0].BagInfoID);
+            BagInfo bagInfo_2 = bagComponent.GetBagInfo(self.BagInfo_Transfer[1].BagInfoID);
+            self.UIItem_Transfer[0].UpdateItem(bagInfo_1, ItemOperateEnum.None);
+            self.UIItem_Transfer[1].UpdateItem(bagInfo_2, ItemOperateEnum.None);
+        }
+
+        public static async ETTask UpdateEquipItemUI(this UIRoleXiLianTransferComponent self)
+        {
+            long instanceid = self.InstanceId;
+            string path = ABPathHelper.GetUGUIPath("Main/Common/UICommonItem");
+            GameObject bundleObj = await ResourcesComponent.Instance.LoadAssetAsync<GameObject>(path);
+            if (instanceid != self.InstanceId)
+            {
+                return;
+            }
+
+            int number = 0;
+            List<BagInfo> bagInfos = self.ZoneScene().GetComponent<BagComponent>().GetBagList();
+            for (int i = 0; i < bagInfos.Count; i++)
+            {
+                int itemID = bagInfos[i].ItemID;
+                ItemConfig itemconf = ItemConfigCategory.Instance.Get(itemID);
+                if (itemconf.ItemType != (int)ItemTypeEnum.Equipment || bagInfos[i].IfJianDing)
+                {
+                    continue;
+                }
+                if (itemconf.EquipType > 100)
+                {
+                    continue;
+                }
+
+                if (itemconf.ItemQuality < 4) {
+                    continue;
+                }
+
+                UIItemComponent uIItemComponent = null;
+                if (number < self.UIEquipList.Count)
+                {
+                    uIItemComponent = self.UIEquipList[number];
+                    uIItemComponent.GameObject.SetActive(true);
+                }
+                else
+                {
+                    GameObject skillItem = GameObject.Instantiate(bundleObj);
+                    UICommonHelper.SetParent(skillItem, self.ItemListNode);
+                    uIItemComponent = self.AddChild<UIItemComponent, GameObject>(skillItem);
+                    self.UIEquipList.Add(uIItemComponent);
+                    uIItemComponent.SetEventTrigger(true);
+                    uIItemComponent.BeginDragHandler = (BagInfo binfo, PointerEventData pdata) => { self.BeginDrag(binfo, pdata); };
+                    uIItemComponent.DragingHandler = (BagInfo binfo, PointerEventData pdata) => { self.Draging(binfo, pdata); };
+                    uIItemComponent.EndDragHandler = (BagInfo binfo, PointerEventData pdata) => { self.EndDrag(binfo, pdata); };
+                    uIItemComponent.PointerDownHandler = (BagInfo binfo, PointerEventData pdata) => { self.OnPointerDown(binfo, pdata).Coroutine(); };
+                    uIItemComponent.PointerUpHandler = (BagInfo binfo, PointerEventData pdata) => { self.OnPointerUp(binfo, pdata); };
+                }
+                uIItemComponent.UpdateItem(bagInfos[i], ItemOperateEnum.SkillSet);
+                uIItemComponent.Image_XuanZhong.SetActive(false);
+                number++;
+            }
+
+            for (int i = number; i < self.UIEquipList.Count; i++)
+            {
+                self.UIEquipList[i].GameObject.SetActive(false);
+            }
+        }
+
+        public static async ETTask OnPointerDown(this UIRoleXiLianTransferComponent self, BagInfo binfo, PointerEventData pdata)
+        {
+            self.IsHoldDown = true;
+            HintHelp.GetInstance().DataUpdate(DataType.HuiShouSelect, $"1_{binfo.BagInfoID}");
+            await TimerComponent.Instance.WaitAsync(400);
+            if (!self.IsHoldDown)
+                return;
+            EventType.ShowItemTips.Instance.ZoneScene = self.DomainScene();
+            EventType.ShowItemTips.Instance.bagInfo = binfo;
+            EventType.ShowItemTips.Instance.itemOperateEnum = ItemOperateEnum.None;
+            EventType.ShowItemTips.Instance.inputPoint = Input.mousePosition;
+            EventType.ShowItemTips.Instance.Occ = self.ZoneScene().GetComponent<UserInfoComponent>().UserInfo.Occ;
+            Game.EventSystem.PublishClass(EventType.ShowItemTips.Instance);
+        }
+
+        public static void OnPointerUp(this UIRoleXiLianTransferComponent self, BagInfo binfo, PointerEventData pdata)
+        {
+            self.IsHoldDown = false;
+            UIHelper.Remove(self.DomainScene(), UIType.UIEquipDuiBiTips);
+        }
+
+        public static void BeginDrag(this UIRoleXiLianTransferComponent self, BagInfo binfo, PointerEventData pdata)
+        {
+            self.IsHoldDown = false;
+            self.UICommonItem_Copy = GameObject.Instantiate(self.UICommonItem_1);
+            self.UICommonItem_Copy.SetActive(true);
+            UICommonHelper.SetParent(self.UICommonItem_Copy, UIEventComponent.Instance.UILayers[(int)UILayer.Low].gameObject);
+
+            ItemConfig itemconfig = ItemConfigCategory.Instance.Get(binfo.ItemID);
+            string path =ABPathHelper.GetAtlasPath_2(ABAtlasTypes.ItemIcon, itemconfig.Icon);
+            Sprite sp = ResourcesComponent.Instance.LoadAsset<Sprite>(path);
+            if (!self.AssetPath.Contains(path))
+            {
+                self.AssetPath.Add(path);
+            }
+            self.UICommonItem_Copy.transform.Find("Image_ItemIcon").GetComponent<Image>().sprite = sp;
+            self.UICommonItem_Copy.transform.Find("Image_ItemQuality").gameObject.SetActive(false);
+            self.UICommonItem_Copy.transform.Find("Image_Binding").gameObject.SetActive(false);
+        }
+
+        public static void Draging(this UIRoleXiLianTransferComponent self, BagInfo binfo, PointerEventData pdata)
+        {
+            self.IsHoldDown = false;
+            RectTransform canvas = self.UICommonItem_Copy.transform.parent.GetComponent<RectTransform>();
+            Camera uiCamera = self.DomainScene().GetComponent<UIComponent>().UICamera;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvas, pdata.position, uiCamera, out self.localPoint);
+
+            self.UICommonItem_Copy.transform.localPosition = new Vector3(self.localPoint.x, self.localPoint.y, 0f);
+        }
+
+        public static bool IsSelcted(this UIRoleXiLianTransferComponent self, long baginfoId)
+        {
+            long selctedId_1 = self.BagInfo_Transfer[0] != null ? self.BagInfo_Transfer[0].BagInfoID : 0;
+            long selctedId_2 = self.BagInfo_Transfer[1] != null ? self.BagInfo_Transfer[1].BagInfoID : 0;
+            return baginfoId == selctedId_1 || baginfoId == selctedId_2;
+        }
+
+        public static void UpdateSelected(this UIRoleXiLianTransferComponent self)
+        {
+            for (int i = 0; i < self.UIEquipList.Count; i++)
+            {
+                long bagInfoId  = self.UIEquipList[i].Baginfo.BagInfoID;
+                bool selected = self.IsSelcted(bagInfoId);
+                self.UIEquipList[i].Image_XuanZhong.SetActive(selected);
+            }
+        }
+
+        public static void EndDrag(this UIRoleXiLianTransferComponent self, BagInfo binfo, PointerEventData pdata)
+        {
+            RectTransform canvas = self.UICommonItem_Copy.transform.parent.GetComponent<RectTransform>();
+            GraphicRaycaster gr = canvas.GetComponent<GraphicRaycaster>();
+            List<RaycastResult> results = new List<RaycastResult>();
+            gr.Raycast(pdata, results);
+
+            for (int i = 0; i < results.Count; i++)
+            {
+                string name = results[i].gameObject.name;
+                if (!name.Contains("UIRoleXiLianTransferItem_"))
+                {
+                    continue;
+                }
+                if (self.IsSelcted(binfo.BagInfoID))
+                {
+                    self.ResetSelect();
+                }
+                int index = int.Parse(name.Split('_')[1]);
+                self.BagInfo_Transfer[index] = binfo;
+                self.UIItem_Transfer[index].GameObject.SetActive(true);
+                self.UIItem_Transfer[index].UpdateItem(binfo, ItemOperateEnum.None);
+                break;
+            }
+
+            if (self.UICommonItem_Copy != null)
+            {
+                GameObject.Destroy(self.UICommonItem_Copy);
+                self.UICommonItem_Copy = null;
+            }
+            self.UpdateSelected();
+        }
+    }
+}
