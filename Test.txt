@@ -18,3 +18,10 @@ E:/GitLDYQReSkin/Unity\Assets\Art\Shader\UIAdditive.shader
 E:/GitLDYQReSkin/Unity\Assets\Art\Shader\UI_Hui.shader
 E:/GitLDYQReSkin/Unity\Assets\Art\Shader\URPUnlitShaderBasic.shader
 E:/GitLDYQReSkin/Unity\Assets\Art\Effects\BackBlur\BackBlur.shader
+
+
+# 跳过 LFS 下载，先拉代码
+GIT_LFS_SKIP_SMUDGE=1 git pull origin main
+
+
+git lfs pull
